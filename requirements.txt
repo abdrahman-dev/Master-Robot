@@ -1,0 +1,18 @@
+# Core
+numpy>=1.24.0
+requests>=2.31.0
+python-dotenv>=1.0.0
+
+# Voice Pipeline
+speechrecognition>=3.8.0
+sounddevice>=0.4.0
+torch>=2.0.0
+edge-tts>=6.1.9
+
+# Vision Pipeline
+opencv-python>=4.8.0
+ultralytics>=8.0.0
+torchvision>=0.15.0
+
+# Face Display
+pygame>=2.5.0

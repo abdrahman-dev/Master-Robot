@@ -1,0 +1,58 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+
+# Environment variables (never commit API keys)
+.env
+
+# Runtime data (SQLite database and logs)
+data/
+!data/.gitkeep
+
+# Large model files
+models/*.pt
+models/*.caffemodel
+models/*.prototxt
+models/*.task
+!models/.gitkeep
+
+# TTS models (legacy Piper)
+piper_models/*.onnx
+piper_models/*.json
+!piper_models/.gitkeep
+
+# Debug output
+vision_debug_output/
+
+# Logs
+*.log
+health_report.txt
+
+# Temp audio files
+*.mp3
+*.wav
+/tts_*.wav
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Torch hub cache (~/.cache/torch/hub)
+# Note: torch downloads models to ~/.cache/torch/hub by default
+# Add to global gitignore or clean manually: rm -rf ~/.cache/torch
