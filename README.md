@@ -1,5 +1,10 @@
 # Rope — AI Educational Robot
 
+![Status](https://img.shields.io/badge/status-in%20development-yellow)
+![Platform](https://img.shields.io/badge/platform-Raspberry%20Pi%205%20%7C%20Windows-blue)
+![Python](https://img.shields.io/badge/python-3.10%2B-green)
+![License](https://img.shields.io/badge/license-MIT-brightgreen)
+
 An interactive educational robot with a conversational voice pipeline and an animated robot face, designed to run on a Raspberry Pi 4/5 or desktop.
 
 ## Features
@@ -11,6 +16,22 @@ An interactive educational robot with a conversational voice pipeline and an ani
 - **Session Memory** — SQLite-backed conversation history with sliding window and summarization
 - **Filler Phrases** — Natural-sounding filler phrases in Arabic and English while the LLM processes
 - **Offline Fallback** — Graceful degradation when OpenRouter is unreachable
+
+## Current Status
+
+> المشروع شغال بالكامل على Desktop (Windows). الخطوة الجاية هي نقله على Raspberry Pi 5.
+
+| المكون | الحالة |
+|--------|--------|
+| Voice Pipeline (VAD → ASR → LLM → TTS) | ✅ شغال |
+| Animated Face UI | ✅ شغال |
+| Settings Panel (swipe gesture) | ✅ شغال |
+| Mic Mute Toggle | ✅ شغال |
+| Vision Pipeline (YOLO + Face + Gesture) | ✅ شغال على Desktop |
+| Wake Word Detection | 🔄 قيد التطوير |
+| Raspberry Pi Deployment | 🔄 الخطوة الجاية |
+| Mobile App Integration | 📋 مخطط |
+| YOLO Fine-tuning (Electronics) | 📋 مخطط |
 
 ## Architecture Overview
 
@@ -77,7 +98,7 @@ An interactive educational robot with a conversational voice pipeline and an ani
 │  │                             │                                   │    │
 │  │                     shared_context                              │    │
 │  └─────────────────────────────┼───────────────────────────────────┘    │
-│                                │ get_vision_context()                   │
+│                                │                                        │
 │                                ▼                                        │
 │                    ┌───────────────────────┐                            │
 │                    │  LLM with Vision      │                            │
@@ -104,15 +125,15 @@ An interactive educational robot with a conversational voice pipeline and an ani
 
 ```
 User speaks ─▶ VAD detects speech ─▶ ASR transcribes ─▶ Filler phrase plays
-                                                              │
-                                                              ▼
+                                                               │
+                                                               ▼
 Face: THINKING ◀────────────────────────────────── LLM processes (with vision context)
-                                                              │
-                                                              ▼
+                                                               │
+                                                               ▼
 Face: SPEAKING ◀─────────────────────────────────── TTS speaks response
-                                                              │
-                                                              ▼
-                                                        Face: IDLE
+                                                               │
+                                                               ▼
+                                                         Face: IDLE
 ```
 
 ## Project Structure
@@ -121,11 +142,13 @@ Face: SPEAKING ◀────────────────────�
 Rope/
 ├── main.py                         # Entry point
 ├── health_check.py                 # Startup diagnostics
+├── record_wake_word.py             # Wake word data collection tool
 ├── requirements.txt                # Python dependencies
 ├── .env                            # Environment variables (not committed)
 ├── .env.example                    # Template for .env
 ├── .gitignore
 ├── setup.sh                        # Raspberry Pi setup script
+├── setup.ps1                       # Windows setup script
 │
 ├── config/
 │   ├── __init__.py
@@ -160,10 +183,13 @@ Rope/
 ├── models/                         # Pre-trained ML models
 │   ├── deploy.prototxt
 │   ├── res10_300x300_ssd_iter_140000.caffemodel
-│   ├── yolov8n.pt
-│   ├── yolov8n-seg.pt
-│   ├── face_landmarker.task
-│   └── hand_landmarker.task
+│   ├── yolov8s.pt
+│   ├── yolov8s-seg.pt
+│   └── emotion_cnn_pytorch.pt
+│
+├── wake_word_data/                 # Wake word training recordings
+│   ├── positive/
+│   └── negative/
 │
 ├── data/                           # Runtime data (SQLite DB, logs)
 ├── piper_models/                   # Legacy TTS models (no longer used)
@@ -279,6 +305,61 @@ The vision pipeline runs camera frames through multiple optional modules:
 | `MINIMAL`  | Obstacle detection only                         | Lightweight, fastest performance    |
 | `BALANCED` | Obstacle + Emotion                              | Good balance of features and speed  |
 | `FULL`     | All modules (objects, scene, obstacle, emotion) | Maximum capability, slowest on Pi 4 |
+
+## Roadmap
+
+### Phase 1 — Desktop Complete ✅
+- [x] Voice pipeline (VAD + ASR + LLM + TTS)
+- [x] Animated robot face (pygame)
+- [x] Vision pipeline (YOLO + face tracking + gesture)
+- [x] Settings panel with touch gestures
+- [x] Mic mute toggle
+- [x] Health check diagnostic tool
+- [x] Adaptive load shedding
+
+### Phase 2 — Wake Word (In Progress) 🔄
+- [ ] Record wake word dataset ("روبي" / "roby") — team contribution via record_wake_word.py
+- [ ] Train openwakeword model
+- [ ] Integrate wake word detector before VAD
+- [ ] Test accuracy in classroom environment
+
+### Phase 3 — Raspberry Pi Deployment 🔄
+- [ ] Run setup.sh on Pi 5
+- [ ] Test all pipelines on Pi hardware
+- [ ] Tune performance (frame skips, vision profiles)
+- [ ] Connect touchscreen display
+- [ ] Test CSI camera with picamera2
+- [ ] GPIO integration (LED status indicators)
+
+### Phase 4 — Mobile App 📋
+- [ ] Design mobile app wireframes
+- [ ] Build app (Flutter or React Native)
+- [ ] WebSocket connection to robot
+- [ ] Live camera feed on mobile
+- [ ] Remote settings control
+
+### Phase 5 — Specialized Vision 📋
+- [ ] Collect electronics/circuit dataset
+- [ ] Fine-tune YOLOv8s on classroom objects
+- [ ] Integrate specialized model
+- [ ] Test with real circuit diagrams
+
+## Team Contribution
+
+**Wake Word Recording (needed now):**
+كل عضو في التيم يسجّل samples عشان نبني dataset للـ wake word.
+
+```bash
+python record_wake_word.py
+```
+
+الهدف لكل شخص:
+- 50+ positive sample — قول "روبي" بأشكال مختلفة
+- 100+ negative sample — كلام عادي من غير "روبي"
+
+بعد التسجيل ابعت فولدر `wake_word_data/` للـ team lead.
+
+**Recommended: 500+ positive, 1000+ negative total across all team members.**
 
 ## Known Limitations
 

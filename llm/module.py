@@ -406,7 +406,7 @@ class LLMModule:
         language = self.session_manager.get_session_language(session_id)
         if language == "ar":
             system_content = (
-                _SETTINGS.system_prompt_arabic
+                _SETTINGS.llm.system_prompt_arabic
                 + "\n\nتعليمات صارمة جداً لا تتجاهلها أبداً:\n"
                 + "- ردك يكون بالعربية العامية المصرية فقط بدون أي استثناء\n"
                 + "- مهما كانت لغة السؤال، ردك عربي دايماً\n"
@@ -416,7 +416,7 @@ class LLMModule:
             )
         else:
             system_content = (
-                _SETTINGS.system_prompt_english
+                _SETTINGS.llm.system_prompt_english
                 + "\n\nStrict rules: Reply in English only. No emoji. Max 3 sentences."
             )
 

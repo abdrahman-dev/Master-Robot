@@ -10,7 +10,7 @@ from config.settings import IS_RASPBERRY_PI
 
 logger = logging.getLogger(__name__)
 
-_MODEL_PATH = Path(__file__).parent.parent.parent / "models" / "yolov8n-seg.pt"
+_MODEL_PATH = Path(__file__).parent.parent.parent / "models" / "yolov8s-seg.pt"
 
 _SCENE_TEMPLATES: dict[str, list[str]] = {
     "classroom": ["classroom", "educational setting", "learning space"],

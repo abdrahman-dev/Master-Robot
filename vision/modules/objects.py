@@ -10,7 +10,7 @@ from config.settings import IS_RASPBERRY_PI
 
 logger = logging.getLogger(__name__)
 
-_MODEL_PATH = Path(__file__).parent.parent.parent / "models" / "yolov8n.pt"
+_MODEL_PATH = Path(__file__).parent.parent.parent / "models" / "yolov8s.pt"
 
 
 class ObjectRecognitionModule:

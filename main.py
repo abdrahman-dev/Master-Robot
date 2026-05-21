@@ -175,6 +175,8 @@ def main() -> None:
                             voice_pipeline.set_vision_active(True)
                             system_mode = SystemMode.VISION_MODE
                     vision_pipeline.set_profile(VisionProfile.FULL)
+            elif key == "mic_muted":
+                voice_pipeline.set_mic_muted(value == "OFF")
 
     face.set_settings_callback(on_settings_change)
 

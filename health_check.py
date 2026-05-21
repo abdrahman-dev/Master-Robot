@@ -1,23 +1,33 @@
 #!/usr/bin/env python3
-"""Rope Health Check — standalone diagnostic script."""
+"""Rope Health Check — enhanced standalone diagnostic script."""
+
+from dotenv import load_dotenv
+load_dotenv()
 
 import importlib
+import importlib.metadata
 import os
+import platform
 import socket
 import subprocess
 import sys
+import tempfile
 import time
+from datetime import datetime
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT))
 
+# ── ANSI codes ────────────────────────────────────────────────────
 OK = "\033[92mOK\033[0m"
 WN = "\033[93mWARN\033[0m"
 ER = "\033[91mERROR\033[0m"
 GR = "\033[90mINFO\033[0m"
+SK = "\033[90mSKIP\033[0m"
 
 RESULTS = []
+REPORT_LINES = []
 
 PIP_TO_MODULE = {
     "python-dotenv": "dotenv",
@@ -26,153 +36,142 @@ PIP_TO_MODULE = {
     "opencv-python": "cv2",
 }
 
+# ── Helpers ───────────────────────────────────────────────────────
 
 def check(name, status, detail=""):
     RESULTS.append((name, status, detail))
-    print(f"  [{status}] {name:40s} {detail}")
+    print(f"  [{status}] {name:45s} {detail}")
+    REPORT_LINES.append(f"[{status}] {name:45s} {detail}")
 
 
 def ansi(s, code):
     return f"\033[{code}m{s}\033[0m"
 
 
+def section(title):
+    print()
+    print(ansi(f"── {title} {'─' * (50 - len(title))}", "4"))
+    REPORT_LINES.append("")
+    REPORT_LINES.append(f"── {title} {'─' * (50 - len(title))}")
+
+
+def is_pi():
+    return os.path.exists("/proc/device-tree/model")
+
+
+def pi_model():
+    if is_pi():
+        try:
+            with open("/proc/device-tree/model") as f:
+                return f.read().strip().replace("\x00", "")
+        except Exception:
+            return "unknown"
+    return None
+
+
+# ── Main ──────────────────────────────────────────────────────────
+
 def main():
+    report_path = ROOT / "health_report.txt"
+
     print()
     print(ansi("=" * 56, "1"))
-    print(ansi("  ROPE HEALTH CHECK", "1"))
+    print(ansi("  ROPE HEALTH CHECK — Enhanced", "1"))
     print(ansi("=" * 56, "1"))
     print()
 
-    # ── 1. Environment ─────────────────────────────────────────
-    print(ansi("-- Environment ---------------------------------", "4"))
+    # ── Platform Info ─────────────────────────────────────────────
+    section("Platform Info")
 
-    pyv = sys.version_info
-    if pyv >= (3, 10):
-        check("Python version", OK, f"{pyv.major}.{pyv.minor}")
-    else:
-        check("Python version", ER, f"{pyv.major}.{pyv.minor} (need >=3.10)")
+    os_name = platform.system()
+    os_release = platform.release()
+    check("OS", OK, f"{os_name} {os_release}")
 
-    req_path = ROOT / "requirements.txt"
-    if req_path.exists():
-        with open(req_path) as f:
-            pkgs = [line.split("#")[0].strip() for line in f if line.strip() and not line.startswith("#")]
-        for pkg_line in pkgs:
-            pkg_name = pkg_line.split(">=")[0].split("==")[0].strip()
-            mod_name = PIP_TO_MODULE.get(pkg_name, pkg_name.replace("-", "_"))
-            try:
-                importlib.import_module(mod_name)
-                check(f"  dep: {pkg_name}", OK)
-            except ImportError as e:
-                check(f"  dep: {pkg_name}", ER, str(e).split(":")[-1].strip())
-    else:
-        check("requirements.txt", ER, "not found")
+    check("Python", OK, sys.version.split("\n")[0])
 
-    env_path = ROOT / ".env"
-    if env_path.exists():
-        check(".env file", OK)
-    else:
-        check(".env file", WN, "not found, env vars may be missing")
-
-    required_env = ["ROBOT_OPENROUTER_API_KEY"]
-    for key in required_env:
-        val = os.getenv(key, "")
-        if val:
-            check(f"  {key}", OK, "set")
-        else:
-            check(f"  {key}", GR, "optional — will use offline mode")
-
-    try:
-        import edge_tts
-        check("edge_tts", OK, edge_tts.__version__ if hasattr(edge_tts, "__version__") else "installed")
-    except ImportError as e:
-        check("edge_tts", ER, str(e).split(":")[-1].strip())
-
-    models_dir = ROOT / "models"
-    check("models/", OK if models_dir.exists() else ER)
-
-    data_dir = ROOT / "data"
-    writable = os.access(str(data_dir), os.W_OK) if data_dir.exists() else False
-    check("data/ writable", OK if writable else WN)
-
-    try:
-        import shutil
-        total, used, free = shutil.disk_usage(str(ROOT))
-        free_gb = free // (2 ** 30)
-        check("Disk free", OK if free_gb >= 1 else WN, f"{free_gb}GB")
-    except Exception:
-        check("Disk free", WN, "unable to check")
+    cpu_count = os.cpu_count() or "unknown"
+    check("CPU cores", OK, str(cpu_count))
 
     try:
         import psutil
         mem = psutil.virtual_memory()
-        free_mb = mem.available / (1024 * 1024)
-        check("RAM available", OK if free_mb >= 2000 else WN, f"{free_mb:.0f}MB")
+        total_gb = mem.total / (1024 ** 3)
+        avail_gb = mem.available / (1024 ** 3)
+        check("RAM", OK, f"{total_gb:.1f}GB total, {avail_gb:.1f}GB available")
     except ImportError:
-        check("RAM available", GR, "install psutil for detail")
+        check("RAM", GR, "install psutil for detail")
 
-    # ── 2. Hardware (non-fatal) ────────────────────────────────
-    print()
-    print(ansi("-- Hardware -----------------------------------", "4"))
+    if is_pi():
+        check("Raspberry Pi", OK, pi_model())
+    else:
+        check("Raspberry Pi", GR, "no — running on desktop/server")
 
-    try:
-        import sounddevice as sd
-        devices = sd.query_devices()
-        has_input = any(d["max_input_channels"] > 0 for d in devices)
-        has_output = any(d["max_output_channels"] > 0 for d in devices)
-        input_name = ""
-        output_name = ""
-        for d in devices:
-            if d["max_input_channels"] > 0 and not input_name:
-                input_name = d["name"]
-            if d["max_output_channels"] > 0 and not output_name:
-                output_name = d["name"]
-        check("Microphone", OK if has_input else WN, input_name or "none found")
-        if has_input:
-            try:
-                with sd.InputStream(samplerate=16000, channels=1, blocksize=480):
-                    check("  sd.InputStream opens", OK)
-            except Exception as e:
-                check("  sd.InputStream opens", WN, str(e)[:60])
-        check("Speaker", OK if has_output else WN, output_name or "none found")
-    except Exception as e:
-        check("sounddevice", ER, str(e)[:60])
+    check("Working directory", OK, str(ROOT))
 
-    try:
-        import cv2
-        cap = cv2.VideoCapture(0)
-        if cap.isOpened():
-            ret, frame = cap.read()
-            if ret and frame is not None:
-                h, w = frame.shape[:2]
-                check("Camera", OK, f"{w}x{h}")
-            else:
-                check("Camera", WN, "opened but no frame")
-            cap.release()
-        else:
-            check("Camera", WN, "could not open index 0")
-    except Exception as e:
-        check("Camera", WN, str(e)[:60])
+    # ── Package Versions ──────────────────────────────────────────
+    section("Package Versions")
 
-    if sys.platform == "linux":
+    packages = [
+        ("numpy", "numpy"),
+        ("requests", "requests"),
+        ("python-dotenv", "dotenv"),
+        ("speechrecognition", "speech_recognition"),
+        ("sounddevice", "sounddevice"),
+        ("torch", "torch"),
+        ("edge-tts", "edge_tts"),
+        ("opencv-python", "cv2"),
+        ("ultralytics", "ultralytics"),
+        ("torchvision", "torchvision"),
+        ("pygame", "pygame"),
+    ]
+
+    for pip_name, import_name in packages:
         try:
-            import multiprocessing
-            cpu_count = multiprocessing.cpu_count()
-            freq = ""
-            try:
-                with open("/proc/cpuinfo") as f:
-                    for line in f:
-                        if "model name" in line:
-                            freq = line.split(":")[-1].strip()[:60]
-                            break
-            except Exception:
-                pass
-            check("Platform", GR, f"{cpu_count} cores | {freq}")
-        except Exception:
-            check("Platform", GR, "linux")
+            ver = importlib.metadata.version(pip_name)
+            check(f"  {pip_name}", OK, f"=={ver}")
+        except importlib.metadata.PackageNotFoundError:
+            check(f"  {pip_name}", ER, "not installed")
+        except Exception as e:
+            check(f"  {pip_name}", WN, str(e)[:50])
 
-    # ── 3. Network ─────────────────────────────────────────────
-    print()
-    print(ansi("-- Network ------------------------------------", "4"))
+    # ── Model Files ───────────────────────────────────────────────
+    section("Model Files")
+
+    model_files = [
+        "models/deploy.prototxt",
+        "models/res10_300x300_ssd_iter_140000.caffemodel",
+        "models/yolov8s.pt",
+        "models/yolov8s-seg.pt",
+        "models/emotion_cnn_pytorch.pt",
+    ]
+
+    for mf in model_files:
+        fp = ROOT / mf
+        if fp.exists():
+            size_mb = fp.stat().st_size / (1024 * 1024)
+            check(f"  {mf}", OK, f"{size_mb:.1f} MB")
+        else:
+            check(f"  {mf}", WN, "missing")
+
+    # ── VAD Settings ──────────────────────────────────────────────
+    section("VAD Settings (from env)")
+
+    vad_keys = [
+        ("ROBOT_VAD_THRESHOLD", "0.45"),
+        ("ROBOT_VAD_SILENCE_TIMEOUT_SEC", "1.20"),
+        ("ROBOT_VAD_MIN_SPEECH_SEC", "0.40"),
+        ("ROBOT_VAD_PRE_ROLL_SEC", "0.40"),
+    ]
+
+    for key, default in vad_keys:
+        val = os.getenv(key)
+        if val is not None:
+            check(f"  {key}", OK, f"{val}  [ENV]")
+        else:
+            check(f"  {key}", GR, f"{default}  [DEFAULT]")
+
+    # ── Network ───────────────────────────────────────────────────
+    section("Network")
 
     for host, label in [("api.openrouter.ai", "OpenRouter API"),
                          ("www.google.com", "Google (ASR)")]:
@@ -185,38 +184,8 @@ def main():
         except Exception as e:
             check(f"  {label}", WN, str(e)[:50])
 
-    api_key = os.getenv("ROBOT_OPENROUTER_API_KEY", "")
-    if api_key:
-        try:
-            import requests
-            t0 = time.time()
-            r = requests.post(
-                "https://openrouter.ai/api/v1/chat/completions",
-                json={
-                    "model": "liquid/lfm-2.5-1.2b-instruct:free",
-                    "messages": [{"role": "user", "content": "hello"}],
-                    "max_tokens": 1,
-                },
-                headers={
-                    "Authorization": f"Bearer {api_key}",
-                    "Content-Type": "application/json",
-                },
-                timeout=10,
-            )
-            latency = time.time() - t0
-            status = r.status_code
-            if status == 200:
-                check("OpenRouter API call", OK, f"{latency:.1f}s")
-            elif status == 401:
-                check("OpenRouter API call", WN, "HTTP 401 — invalid key")
-            else:
-                check("OpenRouter API call", WN, f"HTTP {status}")
-        except Exception as e:
-            check("OpenRouter API call", WN, str(e)[:50])
-
-    # ── 4. Module imports ─────────────────────────────────────
-    print()
-    print(ansi("-- Module Imports -----------------------------", "4"))
+    # ── Module Imports ────────────────────────────────────────────
+    section("Module Imports")
 
     modules = [
         "voice.vad", "voice.asr", "voice.tts", "voice.face",
@@ -233,9 +202,106 @@ def main():
         except Exception as e:
             check(f"  {mod_name}", ER, str(e).split("\n")[0][:70])
 
-    # ── 5. Integration ─────────────────────────────────────────
-    print()
-    print(ansi("-- Integration --------------------------------", "4"))
+    # ── Live Module Tests ─────────────────────────────────────────
+    section("Live Module Tests")
+
+    # 1. VAD live test
+    try:
+        from voice import vad as vad_mod
+        import numpy as np
+        import torch
+
+        t0 = time.monotonic()
+        vad_mod._load_model_once()
+        load_time = (time.monotonic() - t0) * 1000
+        check("  VAD model load", OK, f"{load_time:.0f}ms")
+
+        # Silero VAD requires exactly 512 samples at 16kHz (32ms)
+        audio_chunk = np.zeros(512, dtype=np.float32)
+        t0 = time.monotonic()
+        result = vad_mod.is_speech(audio_chunk)
+        infer_ms = (time.monotonic() - t0) * 1000
+        if not result:
+            check("  VAD silence test", OK, f"correctly silent ({infer_ms:.1f}ms)")
+        else:
+            check("  VAD silence test", WN, f"false positive on silence ({infer_ms:.1f}ms)")
+    except Exception as e:
+        check("  VAD live test", ER, str(e)[:70])
+
+    # 2. TTS live test
+    try:
+        import edge_tts
+        tts_tmp = os.path.join(tempfile.gettempdir(), "rope_health_tts_test.mp3")
+        phrase = "مرحبا"
+        t0 = time.monotonic()
+        communicate = edge_tts.Communicate(text=phrase, voice="ar-EG-ShakirNeural")
+        # edge_tts.Communicate.save is async
+        import asyncio
+        asyncio.run(communicate.save(tts_tmp))
+        gen_ms = (time.monotonic() - t0) * 1000
+
+        if os.path.exists(tts_tmp):
+            fsize = os.path.getsize(tts_tmp)
+            check("  TTS generation", OK, f"{gen_ms:.0f}ms, {fsize} bytes")
+            os.remove(tts_tmp)
+        else:
+            check("  TTS generation", ER, "no output file")
+    except Exception as e:
+        check("  TTS live test", ER, str(e)[:70])
+
+    # 3. LLM live test
+    api_key = os.getenv("ROBOT_OPENROUTER_API_KEY", "").strip()
+    if api_key:
+        try:
+            import requests
+            t0 = time.monotonic()
+            r = requests.post(
+                "https://openrouter.ai/api/v1/chat/completions",
+                json={
+                    "model": os.getenv("ROBOT_OPENROUTER_MODEL", "openrouter/free"),
+                    "messages": [{"role": "user", "content": "say hi"}],
+                    "max_tokens": 5,
+                },
+                headers={
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json",
+                },
+                timeout=15,
+            )
+            resp_ms = (time.monotonic() - t0) * 1000
+            if r.status_code == 200:
+                body = r.json()
+                model_used = body.get("model", "unknown")
+                check("  LLM API call", OK, f"HTTP {r.status_code}, {resp_ms:.0f}ms, model={model_used}")
+            elif r.status_code == 401:
+                check("  LLM API call", WN, f"HTTP 401 — invalid key ({resp_ms:.0f}ms)")
+            else:
+                check("  LLM API call", WN, f"HTTP {r.status_code} ({resp_ms:.0f}ms)")
+        except Exception as e:
+            check("  LLM live test", WN, str(e)[:60])
+    else:
+        check("  LLM API call", GR, "No API key — skipping LLM test")
+
+    # 4. Camera live test
+    try:
+        import cv2
+        cap = cv2.VideoCapture(0)
+        if cap.isOpened():
+            ret, frame = cap.read()
+            if ret and frame is not None:
+                h, w = frame.shape[:2]
+                fps_set = cap.get(cv2.CAP_PROP_FPS)
+                check("  Camera live", OK, f"{w}x{h}, fps={fps_set:.0f}")
+            else:
+                check("  Camera live", WN, "opened but no frame")
+            cap.release()
+        else:
+            check("  Camera live", WN, "could not open index 0")
+    except Exception as e:
+        check("  Camera live test", WN, str(e)[:60])
+
+    # ── Integration ───────────────────────────────────────────────
+    section("Integration")
 
     try:
         os.environ["SDL_VIDEODRIVER"] = "dummy"
@@ -284,30 +350,53 @@ def main():
     except Exception as e:
         check("VoicePipeline instantiate", ER, str(e)[:60])
 
-    # ── Summary ────────────────────────────────────────────────
+    # ── Summary ───────────────────────────────────────────────────
     print()
     print(ansi("=" * 56, "1"))
+
     passed = sum(1 for _, s, _ in RESULTS if s == OK)
     warned = sum(1 for _, s, _ in RESULTS if s == WN)
     errors = sum(1 for _, s, _ in RESULTS if s == ER)
+    skipped = sum(1 for _, s, _ in RESULTS if s in (GR, SK))
     total = len(RESULTS)
-    score = f"{passed}/{total} passed ({warned} warnings, {errors} errors)"
+    score = f"{passed}/{total} passed ({warned} warnings, {errors} errors, {skipped} skipped)"
+
     if errors:
         print(ansi(f"  SCORE: {score}", "91"))
     elif warned:
         print(ansi(f"  SCORE: {score}", "93"))
     else:
         print(ansi(f"  SCORE: {score}", "92"))
+
+    pct = (passed / total * 100) if total > 0 else 0
+    if pct >= 90:
+        readiness = "READY — run python main.py"
+    elif pct >= 70:
+        readiness = "MOSTLY READY — check warnings above"
+    else:
+        readiness = "NOT READY — fix errors above"
+
+    print(ansi(f"  Readiness: {readiness}", "1"))
     print(ansi("=" * 56, "1"))
     print()
 
-    report_path = ROOT / "health_report.txt"
-    with open(report_path, "w") as f:
+    # ── Save report ───────────────────────────────────────────────
+    with open(report_path, "w", encoding="utf-8") as f:
         f.write("ROPE HEALTH CHECK REPORT\n")
-        f.write("=" * 50 + "\n\n")
-        for name, status, detail in RESULTS:
-            f.write(f"[{status}] {name} {detail}\n".strip() + "\n")
-        f.write(f"\nSCORE: {score}\n")
+        f.write(f"Timestamp: {datetime.now().isoformat()}\n")
+        f.write(f"Platform: {platform.system()} {platform.release()}\n")
+        f.write(f"Python: {sys.version.split(chr(10))[0]}\n")
+        f.write(f"CPU cores: {os.cpu_count()}\n")
+        if is_pi():
+            f.write(f"Raspberry Pi: {pi_model()}\n")
+        f.write(f"Working directory: {ROOT}\n")
+        f.write("=" * 56 + "\n\n")
+        for line in REPORT_LINES:
+            f.write(line + "\n")
+        f.write("\n" + "=" * 56 + "\n")
+        f.write(f"SCORE: {score}\n")
+        f.write(f"Readiness: {readiness}\n")
+
     print(f"Full report saved to {report_path}")
 
 

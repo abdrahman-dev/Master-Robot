@@ -117,12 +117,17 @@ class VoicePipeline:
         self._watchdog_ping: Optional[Callable] = None
         self._ping_counter = 0
         self._vision_active = False
+        self._mic_muted = False
 
     def set_vision_active(self, active: bool) -> None:
         self._vision_active = active
 
     def set_watchdog_ping(self, fn: Callable) -> None:
         self._watchdog_ping = fn
+
+    def set_mic_muted(self, muted: bool) -> None:
+        self._mic_muted = muted
+        logger.info("[pipeline] Mic %s", "muted" if muted else "unmuted")
 
     def _next_turn_id(self) -> int:
         with self._turn_lock:
@@ -258,6 +263,8 @@ class VoicePipeline:
 
         def callback(indata, frames, time_info, status) -> None:
             nonlocal segment_chunks, silence_chunks, speech_chunks, current_turn_id, pre_buffer
+            if self._mic_muted:
+                return
             if not self._running:
                 return
             if status:

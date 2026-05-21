@@ -17,6 +17,7 @@ env/
 # IDE
 .vscode/
 .idea/
+*.code-workspace
 
 # Environment variables (never commit API keys)
 .env
@@ -25,11 +26,17 @@ env/
 data/
 !data/.gitkeep
 
+# Wake word data (large audio files — don't commit)
+wake_word_data/
+
 # Large model files
 models/*.pt
+models/*.pth
 models/*.caffemodel
-models/*.prototxt
+!models/deploy.prototxt
 models/*.task
+models/*.onnx
+models/*.onnx.json
 !models/.gitkeep
 
 # TTS models (legacy Piper)
@@ -37,22 +44,39 @@ piper_models/*.onnx
 piper_models/*.json
 !piper_models/.gitkeep
 
+# ONNX models (root level)
+*.onnx
+*.onnx.json
+
+# PyTorch checkpoints (root level)
+*.pt
+*.pth
+
 # Debug output
 vision_debug_output/
 
 # Logs
+logs/
 *.log
 health_report.txt
+setup_log.txt
 
 # Temp audio files
 *.mp3
 *.wav
 /tts_*.wav
 
+# Project report
+project_report.html
+
 # OS
 .DS_Store
 Thumbs.db
+desktop.ini
+
+# Python 3.13 specific
+__phello__/
 
 # Torch hub cache (~/.cache/torch/hub)
 # Note: torch downloads models to ~/.cache/torch/hub by default
-# Add to global gitignore or clean manually: rm -rf ~/.cache/torch
+# Add to global gitignore or clean manually: rm -rf ~/.cache/torch/hub

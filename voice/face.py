@@ -53,10 +53,12 @@ class SettingsState:
     tts_speed: int = 1
     volume: int = 3
     vision_mode: str = "OFF"
+    mic_muted: bool = False
 
     SPEED_LABELS = ["Slow", "Normal", "Fast"]
     VOLUME_LABELS = ["25%", "50%", "75%", "100%"]
     VISION_LABELS = ["OFF", "MINIMAL", "BALANCED", "FULL"]
+    MIC_LABELS = ["ON", "OFF"]
 
 
 # ── Default params schema ─────────────────────────────────────────
@@ -177,6 +179,7 @@ PANEL_ROWS = [
     {"key": "tts_speed",   "icon": "SPD",  "label": "TTS Speed"},
     {"key": "volume",      "icon": "VOL",  "label": "Volume"},
     {"key": "vision_mode", "icon": "VIS",  "label": "Vision Mode"},
+    {"key": "mic_muted",   "icon": "MIC",  "label": "Microphone"},
     {"key": "_close",      "icon": "X",    "label": "Close"},
 ]
 
@@ -190,6 +193,8 @@ def _settings_value(set_s: SettingsState, key: str) -> str:
         return SettingsState.VOLUME_LABELS[set_s.volume]
     if key == "vision_mode":
         return set_s.vision_mode
+    if key == "mic_muted":
+        return "OFF" if set_s.mic_muted else "ON"
     return ""
 
 
@@ -204,6 +209,8 @@ def _settings_cycle(set_s: SettingsState, key: str):
         labels = SettingsState.VISION_LABELS
         idx = (labels.index(set_s.vision_mode) + 1) % len(labels)
         set_s.vision_mode = labels[idx]
+    elif key == "mic_muted":
+        set_s.mic_muted = not set_s.mic_muted
 
 
 # ── Face Module ───────────────────────────────────────────────────
@@ -737,6 +744,9 @@ class FaceModule:
         label = font.render(state_name, True, t.status_text)
         surf.blit(label, (8, bar_y + 2))
 
+        if self._settings.mic_muted:
+            pygame.draw.circle(surf, (255, 60, 60), (465, 10), 5)
+
     # ── settings panel ────────────────────────────────────────
 
     def _draw_settings_panel(self, surf: pygame.Surface) -> None:
@@ -768,7 +778,11 @@ class FaceModule:
                 surf.blit(lbl, (PANEL_X + 20, y + 14))
 
                 val = _settings_value(self._settings, row["key"])
-                v = font_val.render(val, True, t.panel_value)
+                if row["key"] == "mic_muted":
+                    mic_color = (255, 80, 80) if self._settings.mic_muted else (80, 255, 120)
+                    v = font_val.render(val, True, mic_color)
+                else:
+                    v = font_val.render(val, True, t.panel_value)
                 surf.blit(v, (PANEL_X + PANEL_W - 30 - v.get_width(), y + 14))
 
     # ── optional extras ───────────────────────────────────────
