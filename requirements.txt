@@ -1,9 +1,11 @@
 # Core
 numpy>=1.24.0
+pyserial>=3.5
 requests>=2.31.0
 python-dotenv>=1.0.0
 
 # Voice Pipeline
+rapidfuzz>=3.0.0
 speechrecognition>=3.8.0
 sounddevice>=0.4.0
 torch>=2.0.0

@@ -53,8 +53,8 @@ print_info "Installing system dependencies..."
 sudo apt-get install -y \
     python3-pip python3-venv python3-dev \
     portaudio19-dev libsdl2-dev libsdl2-mixer-dev \
-    libatlas-base-dev libopencv-dev \
-    ffmpeg git wget curl
+    libopenblas-dev libopenblas0 libopencv-dev \
+    ffmpeg git wget curl libcamera-apps
 
 print_ok "System packages installed"
 

@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from typing import Deque, List, Optional, Callable
 
 import numpy as np
+from rapidfuzz import fuzz
 
 from config.settings import get_settings
 from voice import asr, tts, vad
@@ -36,9 +37,47 @@ FILLER_PHRASES = {
     ],
 }
 
+WAKE_WORDS = ["يا روبي", "روبي", "roby", "hey roby", "ok roby"]
+
+MOVE_COMMANDS = {
+    "تعالي":    ("forward",     2000),
+    "اقترب":    ("forward",     2000),
+    "ارجع":     ("backward",    2000),
+    "يمين":     ("turn_right",  1000),
+    "شمال":     ("turn_left",   1000),
+    "وقف":      ("stop",        0),
+    "استنى":    ("stop",        0),
+    "دور":      ("turn_right",  3000),
+    "come here":("forward",     2000),
+    "go back":  ("backward",    2000),
+    "stop":     ("stop",        0),
+    "turn right":("turn_right", 1000),
+    "turn left": ("turn_left",  1000),
+}
+
 _SETTINGS = get_settings()
 
 logger = logging.getLogger("voice_pipeline")
+
+
+def _is_wake_word(text: str) -> bool:
+    if not text:
+        return False
+    text_lower = text.lower().strip()
+    for w in WAKE_WORDS:
+        if fuzz.partial_ratio(w, text_lower) >= 70:
+            return True
+    return False
+
+
+def _extract_move_command(text: str):
+    if not text:
+        return None
+    text_lower = text.lower()
+    for keyword, action in MOVE_COMMANDS.items():
+        if keyword in text_lower:
+            return action
+    return None
 
 
 def float32_chunk_to_int16_bytes(chunk: np.ndarray) -> bytes:
@@ -60,7 +99,7 @@ class VoicePipeline:
         tts_module: TTSModule,
         session_id: str,
         face_set_state: Optional[Callable] = None,
-        vision_context_getter: Optional[Callable] = None,
+        motor_controller=None,
     ):
         self._mic_available = True
 
@@ -92,7 +131,6 @@ class VoicePipeline:
 
         self._tts = tts_module
         self._face_set_state = face_set_state
-        self._vision_context_getter = vision_context_getter
 
         if self._face_set_state:
             self._tts.set_callbacks(
@@ -102,6 +140,7 @@ class VoicePipeline:
 
         self._llm = llm
         self._session_id = session_id
+        self._motor = motor_controller
 
         self._latest_turn_id = 0
         self._turn_lock = threading.Lock()
@@ -116,18 +155,11 @@ class VoicePipeline:
 
         self._watchdog_ping: Optional[Callable] = None
         self._ping_counter = 0
-        self._vision_active = False
-        self._mic_muted = False
-
-    def set_vision_active(self, active: bool) -> None:
-        self._vision_active = active
+        self._wake_word_active = False
+        self._wake_word_count = 0
 
     def set_watchdog_ping(self, fn: Callable) -> None:
         self._watchdog_ping = fn
-
-    def set_mic_muted(self, muted: bool) -> None:
-        self._mic_muted = muted
-        logger.info("[pipeline] Mic %s", "muted" if muted else "unmuted")
 
     def _next_turn_id(self) -> int:
         with self._turn_lock:
@@ -197,20 +229,39 @@ class VoicePipeline:
                     self._face_set_state("IDLE")
                 return
 
+            if _is_wake_word(text):
+                logger.info("[pipeline] Wake word detected")
+                if self._face_set_state:
+                    self._face_set_state("LISTENING")
+                self._wake_word_active = True
+                if self._wake_word_count == 0:
+                    greeting = "أنا روبي، مساعدك الذكي! كيف أقدر أساعدك؟"
+                else:
+                    greeting = "نعم"
+                self._wake_word_count += 1
+                self._tts.speak(greeting, "ar")
+                return
+
+            if not self._wake_word_active:
+                if self._face_set_state:
+                    self._face_set_state("IDLE")
+                return
+
+            cmd = _extract_move_command(text)
+            if cmd is not None and self._motor is not None and self._motor.is_available():
+                method_name, duration_ms = cmd
+                getattr(self._motor, method_name)(duration_ms)
+                logger.info("[pipeline] Motor command: %s(%s)", method_name, duration_ms)
+
             if self._face_set_state:
                 self._face_set_state("THINKING")
-
-            vision_context = None
-            if self._vision_active and self._vision_context_getter:
-                vision_context = self._vision_context_getter()
 
             filler = random.choice(FILLER_PHRASES.get(detected_lang, FILLER_PHRASES["ar"]))
             self._tts.speak(filler, detected_lang)
 
             t0 = time.monotonic()
             try:
-                response = self._llm.chat(self._session_id, text,
-                                          vision_context=vision_context)
+                response = self._llm.chat(self._session_id, text)
             except LLMModuleError:
                 logger.warning("[LLM] OpenRouter unavailable, using fallback")
                 response = "I am having trouble connecting right now. Please try again."
@@ -233,6 +284,8 @@ class VoicePipeline:
                 logger.warning("[TTS] No detected language, skipping playback")
                 if self._face_set_state:
                     self._face_set_state("IDLE")
+
+            self._wake_word_active = False
 
         except (asr.ASRModuleError, tts.TTSModuleError) as exc:
             logger.error("[segment] Processing failed: %s", exc, exc_info=True)
@@ -263,8 +316,6 @@ class VoicePipeline:
 
         def callback(indata, frames, time_info, status) -> None:
             nonlocal segment_chunks, silence_chunks, speech_chunks, current_turn_id, pre_buffer
-            if self._mic_muted:
-                return
             if not self._running:
                 return
             if status:
