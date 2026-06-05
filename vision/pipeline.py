@@ -105,7 +105,7 @@ class VisionPipeline:
         if self._obstacle_detector:
             self._obstacle_detector.enabled = config["enable_obstacle"]
         if self._emotion_detector:
-            self._emotion_detector.enabled = True
+            self._emotion_detector.enabled = False 
         logger.info("[vision] Profile %s applied: objects=%s scene=%s obstacle=%s emotion=%s",
                      profile.value, config["enable_objects"], config["enable_scene"],
                      config["enable_obstacle"], config["enable_emotion"])

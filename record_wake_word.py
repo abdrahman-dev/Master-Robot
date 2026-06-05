@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 ROPE — أداة تسجيل بيانات كلمة التنبيه
-تسجيل بيانات التدريب لكلمة التنبيه للروبوت "روبي"
+تسجيل بيانات التدريب لكلمة التنبيه للروبوت "روبو"
 """
 
 import os
@@ -65,23 +65,23 @@ NEG_DIR = DATA_DIR / "negative"
 LOG_FILE = DATA_DIR / "session_log.txt"
 
 POSITIVE_PROMPTS_AR = [
-    "يا روبي",
-    "روبي انت سامعني؟",
-    "روبي يلا بينا",
-    "روبي ساعدني",
-    "هي روبي",
-    "روبي احنا هنبدأ",
-    "روبي في حاجة عايز أسألك",
+    "يا روبو",
+    "روبو انت سامعني؟",
+    "روبو يلا بينا",
+    "روبو ساعدني",
+    "هي روبو",
+    "روبو احنا هنبدأ",
+    "روبو في حاجة عايز أسألك",
 ]
 
 POSITIVE_PROMPTS_EN = [
-    "hey roby",
-    "roby are you there?",
-    "roby let's go",
-    "roby help me",
-    "yo roby",
-    "roby can you hear me?",
-    "ok roby",
+    "hey ropo",
+    "ropo are you there?",
+    "ropo let's go",
+    "ropo help me",
+    "yo ropo",
+    "ropo can you hear me?",
+    "ok ropo",
 ]
 
 NEGATIVE_PROMPTS = [
@@ -223,8 +223,8 @@ def main():
         print_banner()
         print(f"{GREEN}المسجّل: {BOLD}{recorder_name}{RESET}")
         print()
-        print(f"{YELLOW}[P]{RESET} عينات إيجابية — قول {GREEN}\"روبي\"{RESET}")
-        print(f"{YELLOW}[N]{RESET} عينات سلبية — كلام عشوائي بدون {RED}\"روبي\"{RESET}")
+        print(f"{YELLOW}[P]{RESET} عينات إيجابية — قول {GREEN}\"روبو\"{RESET}")
+        print(f"{YELLOW}[N]{RESET} عينات سلبية — كلام عشوائي بدون {RED}\"روبو\"{RESET}")
         print(f"{YELLOW}[Q]{RESET} خروج")
         print()
         choice = input(f"{CYAN}اختار [P/N/Q]: {RESET}").strip().lower()

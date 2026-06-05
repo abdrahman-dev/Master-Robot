@@ -111,6 +111,7 @@ def main() -> None:
         session_id=session_id,
         face_set_state=set_face_state,
         motor_controller=motor,
+        vision_context_getter=vision_pipeline.get_shared_context,
     )
 
     if vision_pipeline.open():

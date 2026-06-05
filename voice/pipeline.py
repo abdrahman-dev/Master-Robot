@@ -37,7 +37,7 @@ FILLER_PHRASES = {
     ],
 }
 
-WAKE_WORDS = ["يا روبي", "روبي", "roby", "hey roby", "ok roby"]
+WAKE_WORDS = ["يا روبو", "روبو", "ropo", "hey robo", "ok robo"]
 
 MOVE_COMMANDS = {
     "تعالي":    ("forward",     2000),
@@ -100,6 +100,7 @@ class VoicePipeline:
         session_id: str,
         face_set_state: Optional[Callable] = None,
         motor_controller=None,
+        vision_context_getter=None,
     ):
         self._mic_available = True
 
@@ -141,6 +142,7 @@ class VoicePipeline:
         self._llm = llm
         self._session_id = session_id
         self._motor = motor_controller
+        self._vision_context_getter = vision_context_getter
 
         self._latest_turn_id = 0
         self._turn_lock = threading.Lock()
@@ -235,7 +237,7 @@ class VoicePipeline:
                     self._face_set_state("LISTENING")
                 self._wake_word_active = True
                 if self._wake_word_count == 0:
-                    greeting = "أنا روبي، مساعدك الذكي! كيف أقدر أساعدك؟"
+                    greeting = "أنا روبو، مساعدك الذكي! كيف أقدر أساعدك؟"
                 else:
                     greeting = "نعم"
                 self._wake_word_count += 1
@@ -259,9 +261,11 @@ class VoicePipeline:
             filler = random.choice(FILLER_PHRASES.get(detected_lang, FILLER_PHRASES["ar"]))
             self._tts.speak(filler, detected_lang)
 
+            vision_context = self._vision_context_getter() if self._vision_context_getter else None
+
             t0 = time.monotonic()
             try:
-                response = self._llm.chat(self._session_id, text)
+                response = self._llm.chat(self._session_id, text, vision_context=vision_context)
             except LLMModuleError:
                 logger.warning("[LLM] OpenRouter unavailable, using fallback")
                 response = "I am having trouble connecting right now. Please try again."

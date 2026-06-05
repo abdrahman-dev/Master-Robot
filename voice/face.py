@@ -421,7 +421,7 @@ class FaceModule:
         pygame.font.init()
         flags = pygame.FULLSCREEN if self._fullscreen else 0
         screen = pygame.display.set_mode((self.W, self.H), flags)
-        pygame.display.set_caption("Roby")
+        pygame.display.set_caption("Ropo")
         clock = pygame.time.Clock()
         surf = pygame.Surface((self.W, self.H))
 
@@ -464,7 +464,7 @@ class FaceModule:
                 logger.error("[face] Render error: %s", exc, exc_info=True)
                 surf.fill((6, 8, 16))
                 font = pygame.font.Font(None, 22)
-                fb = font.render("Roby", True, (0, 120, 255))
+                fb = font.render("Ropo", True, (0, 120, 255))
                 surf.blit(fb, (self.W // 2 - 24, self.H // 2 - 12))
 
             screen.blit(surf, (0, 0))

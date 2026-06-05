@@ -209,7 +209,7 @@ In-pygame overlay with touch-input rows: Language (Arabic/English), TTS Speed (S
 - **Session Management**: SQLite with WAL mode, per-thread connections
 - **Sliding Window**: Last 50 messages (configurable)
 - **Auto-Summarization**: Triggered at window size threshold
-- **Arabic System Prompt**: "انت روبوت تعليمي ذكي اسمك روبي. تتحدث مع طلاب في مرحلة التعليم الأساسي..."
+- **Arabic System Prompt**: "انت روبوت تعليمي ذكي اسمك روبو. تتحدث مع طلاب في مرحلة التعليم الأساسي..."
 - **Vision Integration**: `[VISION]` prefix injected into user message with detected faces/objects/gestures/emotions/obstacles
 
 ### Configuration

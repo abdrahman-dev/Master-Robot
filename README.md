@@ -318,7 +318,7 @@ The vision pipeline runs camera frames through multiple optional modules:
 - [x] Adaptive load shedding
 
 ### Phase 2 — Wake Word (In Progress) 🔄
-- [ ] Record wake word dataset ("روبي" / "roby") — team contribution via record_wake_word.py
+- [ ] Record wake word dataset ("روبو" / "ropo") — team contribution via record_wake_word.py
 - [ ] Train openwakeword model
 - [ ] Integrate wake word detector before VAD
 - [ ] Test accuracy in classroom environment
@@ -354,8 +354,8 @@ python record_wake_word.py
 ```
 
 الهدف لكل شخص:
-- 50+ positive sample — قول "روبي" بأشكال مختلفة
-- 100+ negative sample — كلام عادي من غير "روبي"
+- 50+ positive sample — قول "روبو" بأشكال مختلفة
+- 100+ negative sample — كلام عادي من غير "روبو"
 
 بعد التسجيل ابعت فولدر `wake_word_data/` للـ team lead.
 
