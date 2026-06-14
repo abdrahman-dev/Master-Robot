@@ -47,8 +47,6 @@ def build_vision_prompt(user_message: str, vision_context: Optional[Dict[str, An
     if not vision_context:
         return user_message
 
-    parts = []
-
     faces_data = vision_context.get("faces", [])
     gesture_data = vision_context.get("gesture", {})
     emotion_data = vision_context.get("emotion", {})
@@ -56,53 +54,40 @@ def build_vision_prompt(user_message: str, vision_context: Optional[Dict[str, An
     scene_data = vision_context.get("scene", {})
     obstacle_data = vision_context.get("obstacle", {})
 
-    has_data = bool(faces_data or gesture_data.get("gesture", "") != "none"
-                    or emotion_data.get("emotion", "") not in ("", "neutral")
-                    or objects_data.get("objects") or scene_data.get("scene_description")
-                    or obstacle_data.get("obstacle_detected"))
+    parts = []
 
-    if has_data:
-        if faces_data:
-            count = len(faces_data)
-            new_c = sum(1 for f in faces_data if f.get("status") == "new_student")
-            if new_c:
-                parts.append(f"Student detected ({new_c} new)")
-            else:
-                parts.append(f"Student detected ({count} face(s))")
+    if faces_data:
+        count = len(faces_data)
+        parts.append(f"شايف {count} شخص قدامي")
 
-        obj_prompt = objects_data.get("prompt", "")
-        if obj_prompt:
-            parts.append(f"Objects: {obj_prompt}")
-        else:
-            obj_list = objects_data.get("objects", [])
-            labels = [o.get("label", "") for o in obj_list if o.get("label")]
-            if labels:
-                parts.append(f"Objects: {', '.join(labels[:5])}")
+    obj_list = objects_data.get("objects", [])
+    if obj_list:
+        labels = [o.get("label", "") for o in obj_list if o.get("label")]
+        if labels:
+            parts.append(f"شايف: {', '.join(labels[:5])}")
 
-        scene_desc = scene_data.get("scene_description", "")
-        if scene_desc:
-            parts.append(f"Scene: {scene_desc[:80]}")
+    scene_desc = scene_data.get("scene_description", "")
+    if scene_desc:
+        parts.append(f"المكان: {scene_desc[:60]}")
 
-        emotion = emotion_data.get("emotion", "")
-        if emotion and emotion != "neutral":
-            parts.append(f"Mood: {emotion}")
+    emotion = emotion_data.get("emotion", "")
+    if emotion and emotion not in ("neutral", "", "none"):
+        parts.append(f"الشخص يبدو: {emotion}")
 
-        gesture = gesture_data.get("gesture", "")
-        command = gesture_data.get("command", "")
-        if gesture and gesture != "none":
-            label = f"Gesture: {gesture}"
-            if command and command != "none":
-                label += f" ({command})"
-            parts.append(label)
+    gesture = gesture_data.get("gesture", "")
+    if gesture and gesture not in ("none", "", "unknown"):
+        parts.append(f"حركة يد: {gesture}")
 
-        if obstacle_data.get("obstacle_detected"):
-            parts.append(f"Obstacle: {obstacle_data.get('direction', 'unknown')}")
-    else:
-        parts.append("Camera active -- no faces or objects detected")
+    if obstacle_data.get("obstacle_detected"):
+        direction = obstacle_data.get("direction", "")
+        parts.append(f"في عائق {direction}")
 
-    vision_line = "[VISION] " + " | ".join(parts)
+    if not parts:
+        return user_message
+
+    vision_line = "ما تشوفه الكاميرا دلوقتي: " + " | ".join(parts)
     if user_message:
-        return f"{vision_line}\n{user_message}"
+        return f"{vision_line}\n\nسؤال الطالب: {user_message}"
     return vision_line
 
 
@@ -408,7 +393,7 @@ class LLMModule:
             system_content = (
                 _SETTINGS.llm.system_prompt_arabic
                 + "\n\nتعليمات صارمة جداً لا تتجاهلها أبداً:\n"
-                + "- ردك يكون بالعربية العامية المصرية فقط بدون أي استثناء\n"
+                + "- ردك يكون باللغة العربية الفصحى البسيطة فقط بدون أي استثناء\n"
                 + "- مهما كانت لغة السؤال، ردك عربي دايماً\n"
                 + "- ممنوع تماماً: أي كلمة إنجليزية، أي إيموجي، أي رموز خاصة\n"
                 + "- الرد جملتين أو ثلاثة بالكتير، مختصر ومفيد\n"
@@ -433,7 +418,7 @@ class LLMModule:
             {"role": "system", "content": system_content},
             *history,
             {"role": "user", "content": "[تذكير: ردك لازم يكون بالعربية العامية المصرية فقط]" if language == "ar" else "[Reminder: Reply in English only]"},
-            {"role": "assistant", "content": "حاضر، هرد بالعربية العامية المصرية فقط." if language == "ar" else "Sure, I will reply in English only."},
+            {"role": "assistant", "content": "حسناً، سأرد باللغة العربية الفصحى." if language == "ar" else "Sure, I will reply in English only."},
             {"role": "user", "content": final_message},
         ]
 

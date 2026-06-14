@@ -21,13 +21,13 @@ FILLER_PHRASES = {
     "ar": [
         "لحظة بفكر...",
         "سؤال حلو، خليني أفكر...",
-        "مم، ثانية...",
+        "ثواني كدا اظبطها في دماغي و اقولك...",
         "تمام، بفكر معاك...",
         "اكيد, بفكر شويه...",
         "ثواني بفكر في الموضوع...",
         "حلو، خليني أفكر شويه...",
         "ثواني بفكر في جواب مناسب...",
-        "هم، خليني أشوف...",
+        "خليني اشوف كدا..."
     ],
     "en": [
         "Let me think...",
@@ -261,7 +261,23 @@ class VoicePipeline:
             filler = random.choice(FILLER_PHRASES.get(detected_lang, FILLER_PHRASES["ar"]))
             self._tts.speak(filler, detected_lang)
 
-            vision_context = self._vision_context_getter() if self._vision_context_getter else None
+            vision_context = None
+            if self._vision_context_getter:
+                ctx = self._vision_context_getter()
+                faces = ctx.get("faces", [])
+                objects = ctx.get("objects", {}).get("objects", [])
+                obstacle = ctx.get("obstacle", {}).get("obstacle_detected", False)
+                gesture = ctx.get("gesture", {}).get("gesture", "none")
+                emotion = ctx.get("emotion", {}).get("emotion", "neutral")
+                has_real_data = (
+                    len(faces) > 0 or
+                    len(objects) > 0 or
+                    obstacle or
+                    gesture not in ("none", "", "unknown") or
+                    emotion not in ("neutral", "", "none")
+                )
+                if has_real_data:
+                    vision_context = ctx
 
             t0 = time.monotonic()
             try:
