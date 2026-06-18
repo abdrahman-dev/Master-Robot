@@ -1,0 +1,15 @@
+[Unit]
+Description=Ropo Shutdown Polling Client
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+EnvironmentFile=/etc/ropo-shutdown.env
+ExecStart=/usr/bin/python3 /opt/ropo/robot_shutdown_client.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,637 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Vision Sub-modules Documentation</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Inter', -apple-system, sans-serif; background: #f8fafc; color: #0f172a; line-height: 1.7; }
+  .container { max-width: 960px; margin: 0 auto; padding: 2rem 1.5rem; }
+  h1 { font-size: 2.5rem; font-weight: 700; letter-spacing: -0.02em; margin-bottom: 0.25rem; color: #0f172a; }
+  h2 { font-size: 1.65rem; font-weight: 600; margin-top: 2.5rem; margin-bottom: 1rem; padding-bottom: 0.5rem; border-bottom: 2px solid #e2e8f0; color: #1e293b; }
+  h3 { font-size: 1.2rem; font-weight: 600; margin-top: 1.75rem; margin-bottom: 0.75rem; color: #334155; }
+  h4 { font-weight: 600; margin-top: 1.25rem; margin-bottom: 0.5rem; color: #475569; }
+  p { margin-bottom: 1rem; }
+  ul, ol { margin-bottom: 1rem; padding-left: 1.5rem; }
+  li { margin-bottom: 0.3rem; }
+  code { font-family: 'JetBrains Mono', monospace; font-size: 0.88em; background: #e2e8f0; padding: 0.15em 0.4em; border-radius: 4px; }
+  pre { background: #1e293b; color: #e2e8f0; padding: 1rem 1.25rem; border-radius: 8px; overflow-x: auto; font-size: 0.85rem; line-height: 1.5; margin-bottom: 1rem; }
+  pre code { background: none; padding: 0; }
+  .screenshot-placeholder { background: linear-gradient(135deg, #1e293b 0%, #334155 100%); border: 1px dashed #64748b; border-radius: 8px; padding: 2rem; text-align: center; margin: 1.25rem 0; color: #94a3b8; font-family: 'JetBrains Mono', monospace; font-size: 0.9rem; }
+  .screenshot-placeholder strong { color: #f1f5f9; display: block; margin-bottom: 0.4rem; font-size: 1rem; }
+  .info-box { background: #eff6ff; border-left: 4px solid #3b82f6; padding: 1rem 1.25rem; border-radius: 6px; margin-bottom: 1rem; }
+  .info-box.warn { background: #fefce8; border-color: #eab308; }
+  .info-box.tip { background: #f0fdf4; border-color: #22c55e; }
+  table { width: 100%; border-collapse: collapse; margin-bottom: 1.5rem; font-size: 0.9rem; }
+  th, td { border: 1px solid #e2e8f0; padding: 0.6rem 0.8rem; text-align: left; }
+  th { background: #f1f5f9; font-weight: 600; color: #334155; }
+  tr:nth-child(even) { background: #f8fafc; }
+  .tag { display: inline-block; font-size: 0.75rem; font-weight: 600; padding: 0.2rem 0.6rem; border-radius: 999px; margin-right: 0.3rem; }
+  .tag.ml { background: #dbeafe; color: #1d4ed8; }
+  .tag.cv { background: #fce7f3; color: #be185d; }
+  .tag.hybrid { background: #ede9fe; color: #6d28d9; }
+  .tag.real { background: #dcfce7; color: #15803d; }
+  hr { border: none; border-top: 1px solid #e2e8f0; margin: 2rem 0; }
+  .badge { display: inline-block; background: #e2e8f0; padding: 0.2rem 0.6rem; border-radius: 4px; font-size: 0.75rem; font-weight: 500; }
+  .flow-diagram { background: #f1f5f9; border-radius: 8px; padding: 1.5rem; text-align: center; margin: 1.25rem 0; overflow-x: auto; }
+  .flow-diagram pre { background: transparent; color: #334155; text-align: left; display: inline-block; margin: 0; }
+  @media print { body { background: white; } .screenshot-placeholder { break-inside: avoid; } h2 { break-after: avoid; } }
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>Vision Sub-modules Documentation</h1>
+<p style="color:#64748b; font-size:1.05rem; margin-bottom:2rem;">
+Version 1.0 — Graduate Project &mdash; Real-time Vision Pipeline for Assistive Robotics
+</p>
+
+<!-- ============================================================ -->
+<h2>1. Folder Purpose</h2>
+<p>
+The <code>vision/modules/</code> directory contains six individual vision processing modules,
+each of which solves a specific perception task required by the assistive robotics system.
+Rather than a monolithic perception engine, each module is self-contained — it owns its model
+loading, inference logic, and state — making the system modular, testable, and extensible.
+</p>
+<p>Every module exposes a consistent <code>process_frame(frame) → dict</code> interface so the
+orchestrating <code>VisionPipeline</code> can treat them polymorphically.</p>
+
+<table>
+  <tr><th>Module</th><th>File</th><th>Task</th><th>Approach</th></tr>
+  <tr><td>Face Tracking</td><td><code>face_tracker.py</code></td><td>Detect &amp; identify faces</td><td><span class="tag hybrid">Hybrid</span> OpenCV DNN + LBP</td></tr>
+  <tr><td>Gesture</td><td><code>gesture.py</code></td><td>Hand gesture recognition</td><td><span class="tag cv">Traditional CV</span> Skin masking + convexity</td></tr>
+  <tr><td>Emotion</td><td><code>emotion.py</code></td><td>Facial expression classification</td><td><span class="tag ml">Deep Learning</span> PyTorch CNN</td></tr>
+  <tr><td>Objects</td><td><code>objects.py</code></td><td>Object detection</td><td><span class="tag ml">Deep Learning</span> YOLOv8</td></tr>
+  <tr><td>Scene</td><td><code>scene.py</code></td><td>Scene segmentation</td><td><span class="tag ml">Deep Learning</span> YOLOv8-seg</td></tr>
+  <tr><td>Obstacle</td><td><code>obstacle.py</code></td><td>Motion-based obstacle detection</td><td><span class="tag cv">Traditional CV</span> Lucas-Kanade optical flow</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2>2. Architecture Overview</h2>
+<p>The <code>VisionPipeline</code> (parent directory) owns a reference to each module and
+calls <code>process_frame</code> in a defined order every cycle. Each module returns a
+dictionary fragment; the pipeline merges them into a unified context dictionary that is
+serialised and sent to the LLM reasoning engine.</p>
+
+<div class="flow-diagram">
+<pre>
+┌─────────────────────────────────────────────────────────────────┐
+│                        VisionPipeline                           │
+│  Input Frame ──┬──► face_tracker  ──► { faces: [...] }          │
+│                ├──► gesture       ──► { gesture: "stop" }      │
+│                ├──► emotion       ──► { emotion: "happy" }     │
+│                ├──► objects       ──► { objects: "a cup" }     │
+│                ├──► scene         ──► { scene: "indoor" }      │
+│                └──► obstacle      ──► { obstacle_dir: "left" } │
+│                                      │                          │
+│                                      ▼                          │
+│                              Unified Context Dict               │
+│         ┌─────────────────────────────────────────────┐         │
+│         │  { faces, gesture, emotion, objects, scene, │         │
+│         │    obstacle_dir, fps, timestamp }           │         │
+│         └──────────────┬──────────────────────────────┘         │
+│                        ▼                                        │
+│                  LLM Reasoning Engine                           │
+└─────────────────────────────────────────────────────────────────┘
+</pre>
+</div>
+
+<p><strong>Data flow notes:</strong></p>
+<ul>
+  <li>Modules are <em>stateless</em> from the pipeline's perspective — each owns its internal
+    buffer/state (e.g. gesture stability buffer, emotion smoothing window).</li>
+  <li>The pipeline controls <code>frame_skip</code> per module to throttle expensive inference.</li>
+  <li>All modules operate on the <strong>same BGR frame</strong>; no module modifies it in place.</li>
+  <li>If a module raises an exception, the pipeline catches it and inserts an error placeholder
+    so one failing module does not crash the entire system.</li>
+</ul>
+
+<!-- ============================================================ -->
+<h2>3. Files Overview Table</h2>
+<table>
+  <tr><th>File</th><th>Lines</th><th>Classes</th><th>External Dependencies</th><th>Output Keys</th></tr>
+  <tr><td><code>face_tracker.py</code></td><td>200</td><td><code>FaceIdentityTracker</code></td><td>opencv-python, numpy, uuid</td><td><code>faces[]</code></td></tr>
+  <tr><td><code>gesture.py</code></td><td>178</td><td><code>GestureDetector</code></td><td>opencv-python, numpy</td><td><code>gesture</code></td></tr>
+  <tr><td><code>emotion.py</code></td><td>227</td><td><code>EmotionDetector</code>, <code>EmotionCNN</code></td><td>torch, torchvision, opencv-python</td><td><code>emotion</code></td></tr>
+  <tr><td><code>objects.py</code></td><td>117</td><td><code>ObjectRecognitionModule</code></td><td>ultralytics, numpy</td><td><code>objects</code></td></tr>
+  <tr><td><code>scene.py</code></td><td>136</td><td><code>SceneSegmentationModule</code></td><td>ultralytics, numpy</td><td><code>scene</code></td></tr>
+  <tr><td><code>obstacle.py</code></td><td>207</td><td><code>ObstacleDetector</code></td><td>opencv-python, numpy</td><td><code>obstacle_dir</code></td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2>4. Detailed File Explanations</h2>
+
+<!-- ---- 4.1 Face Tracker ---- -->
+<h3>4.1 <code>face_tracker.py</code> — Face Identity Tracking</h3>
+<p><strong>Purpose:</strong> Detect human faces in the video stream and recognise them
+across frames by assigning stable UUID identities based on appearance similarity.</p>
+
+<h4>Class Hierarchy</h4>
+<ul>
+  <li><code>FaceIdentityTracker</code> — main class</li>
+  <li><em>No internal classes; helper functions:</em> <code>_ensure_models()</code>, <code>_face_embedding()</code></li>
+</ul>
+
+<h4>Key Algorithms</h4>
+<p><strong>Face detection</strong> uses OpenCV's DNN module with a Caffe-based SSD
+( Single Shot Multibox Detector) model. The <code>_ensure_models()</code> method downloads
+<code>deploy.prototxt</code> and <code>res10_300x300_ssd_iter_140000.caffemodel</code> from a
+remote URL if they are not present locally — a standard lazy-download pattern.</p>
+
+<p><strong>Face embedding</strong> relies on Local Binary Patterns (LBP). The helper
+<code>_face_embedding(gray_crop, size=64)</code> resizes the detected face region to 64×64,
+computes a uniform LBP histogram over the image and normalises it to unit length.
+LBP is chosen for its lighting invariance, low computational cost, and reasonable
+discriminative power for a constrained set of identities.</p>
+
+<div class="screenshot-placeholder">
+  <strong>Figure 4.1.1 — LBP Embedding Computation</strong>
+  [Screenshot: Face crop → grayscale → resize 64×64 → LBP histogram → normalised embedding vector]
+</div>
+
+<p><strong>Identity matching</strong> uses cosine distance. <code>_identify_face(embedding)</code>
+compares the new embedding against all stored known embeddings. If the minimum cosine
+distance is below a threshold (default ~0.4), the face is matched to that identity;
+otherwise <code>_register_new(embedding)</code> creates a new entry with a UUID.</p>
+
+<div class="screenshot-placeholder">
+  <strong>Figure 4.1.2 — Face Identity Matching via Cosine Distance</strong>
+  [Screenshot: Known embeddings list → cosine distance calculation → threshold comparison → UUID assignment]
+</div>
+
+<p><strong>Performance features:</strong> <code>frame_skip</code> controls how often detection
+runs; between detections the module returns the last known result. <code>scale_factor</code>
+controls the image pyramid scale for the DNN detector.</p>
+
+<div class="info-box tip">
+<strong>Design rationale:</strong> LBP histograms are used instead of a second neural network
+to keep the Raspberry Pi compute budget low. The combination of a DNN for detection and
+a classical CV descriptor for recognition is a textbook <em>hybrid pipeline</em>.
+</div>
+
+<!-- ---- 4.2 Gesture ---- -->
+<h3>4.2 <code>gesture.py</code> — Hand Gesture Recognition</h3>
+<p><strong>Purpose:</strong> Recognise static hand gestures from a video stream using
+purely traditional computer vision techniques — no machine learning model required.</p>
+
+<h4>Class Hierarchy</h4>
+<ul>
+  <li><code>GestureDetector</code> — main class</li>
+</ul>
+
+<h4>Key Algorithms</h4>
+<p><strong>Skin colour modeling</strong> uses an intersection of two colour spaces.
+<code>_skin_mask(frame)</code> thresholds the frame in both HSV ( Hue, Saturation, Value)
+and YCrCb ( luminance + chrominance) spaces. A pixel is classified as skin only if
+it passes <em>both</em> thresholds:</p>
+<ul>
+  <li>HSV: 0&deg; ≤ H ≤ 20&deg;, S &gt; 48, V &gt; 80</li>
+  <li>YCrCb: 133 ≤ Cr ≤ 173, 77 ≤ Cb ≤ 127</li>
+</ul>
+<p>The intersection reduces false positives from background objects with skin-like hues.</p>
+
+<div class="screenshot-placeholder">
+  <strong>Figure 4.2.1 — Skin Mask Generation (HSV + YCrCb Intersection)</strong>
+  [Screenshot: Input frame → HSV mask → YCrCb mask → bitwise-AND → final binary skin mask]
+</div>
+
+<p><strong>Finger counting</strong> via convexity defects. <code>_count_fingers(contour)</code>
+extracts the largest contour from the skin mask, computes its convex hull and then the
+convexity defects (points where the contour deviates inward from the hull). Each defect
+that exceeds a depth threshold corresponds to a valley between fingers. The number of
+raised fingers = defects + 1 (the thumb). A pointing-up gesture is further verified by
+<code>_verify_pointing_up()</code> which checks aspect ratio and ensures the topmost point
+of the contour is the fingertip.</p>
+
+<div class="screenshot-placeholder">
+  <strong>Figure 4.2.2 — Finger Counting via Convexity Defects</strong>
+  [Screenshot: Skin contour → convex hull (green) → convexity defects (red dots) → finger count labelled]
+</div>
+
+<p><strong>Temporal stabilisation</strong> uses a <code>buffer_size</code>-sized deque and
+majority voting. <code>_update_stable()</code> counts the most frequent gesture label in the
+buffer and only emits a new stable label after <code>stability_frames</code> consecutive
+agreements, preventing flickering between frames.</p>
+
+<p><strong>Command mapping:</strong> The module-level dict <code>GESTURE_TO_COMMAND</code>
+translates recognised gestures to application commands — <code>open_palm → "stop"</code>,
+<code>pointing_up → "continue"</code>.</p>
+
+<!-- ---- 4.3 Emotion ---- -->
+<h3>4.3 <code>emotion.py</code> — Facial Emotion Recognition</h3>
+<p><strong>Purpose:</strong> Classify the emotional expression of the detected face
+into one of seven categories: angry, disgust, fear, happy, neutral, sad, surprise.</p>
+
+<h4>Class Hierarchy</h4>
+<ul>
+  <li><code>EmotionDetector</code> — public API, owns face detection + model inference</li>
+  <li><code>EmotionCNN</code> — internal PyTorch <code>nn.Module</code> defining the network</li>
+</ul>
+
+<h4>Key Algorithms</h4>
+<p><strong>Face detection</strong> uses a Haar cascade classifier (OpenCV's
+<code>CascadeClassifier</code> with <code>haarcascade_frontalface_default.xml</code>).
+Haar cascades are fast on CPU and sufficient for frontal face detection where the
+emotion is most visible.</p>
+
+<p><strong>CNN architecture</strong> is a 7-layer network with three convolutional blocks:</p>
+<pre>
+Input (1, 48, 48)
+  │
+  ├─ Conv2d(1, 32, 3×3) → BatchNorm → ReLU → MaxPool(2×2) → Dropout(0.25)
+  ├─ Conv2d(32, 64, 3×3) → BatchNorm → ReLU → MaxPool(2×2) → Dropout(0.25)
+  ├─ Conv2d(64, 128, 3×3) → BatchNorm → ReLU → MaxPool(2×2) → Dropout(0.25)
+  │
+  ├─ Flatten → Linear(128 × 6 × 6 → 512) → BatchNorm → ReLU → Dropout(0.5)
+  └─ Linear(512 → 7) → Softmax
+</pre>
+
+<div class="screenshot-placeholder">
+  <strong>Figure 4.3.1 — Emotion CNN Architecture and Forward Pass</strong>
+  [Screenshot: Model definition showing nn.Sequential with Conv2d → BN → ReLU → MaxPool → Dropout blocks]
+</div>
+
+<p><strong>Inference pipeline</strong> in <code>_detect(frame)</code>:</p>
+<ol>
+  <li>Haar cascade detects face bounding box</li>
+  <li>Crop and resize to 48×48 grayscale</li>
+  <li>Normalise pixel values to [0, 1]</li>
+  <li>Add batch and channel dimensions → tensor shape (1, 1, 48, 48)</li>
+  <li>Forward pass through <code>EmotionCNN</code> → logits → softmax → argmax</li>
+</ol>
+
+<p><strong>Smoothing:</strong> <code>_get_smoothed_emotion()</code> maintains a sliding window
+of predictions and returns the mode (majority vote). This prevents single-frame misclassifications
+from affecting the output.</p>
+
+<p><strong>Weight loading:</strong> <code>_load_weights()</code> loads a pre-trained
+<code>emotion_cnn_pytorch.pt</code> checkpoint using <code>torch.load(..., map_location='cpu')</code>
+and applies it to the CNN via <code>load_state_dict()</code> with <code>strict=False</code>.</p>
+
+<!-- ---- 4.4 Objects ---- -->
+<h3>4.4 <code>objects.py</code> — Object Detection</h3>
+<p><strong>Purpose:</strong> Detect and label common objects in the frame using YOLOv8,
+returning a natural-language description of the scene's contents.</p>
+
+<h4>Class Hierarchy</h4>
+<ul>
+  <li><code>ObjectRecognitionModule</code> — main class</li>
+</ul>
+
+<h4>Key Algorithms</h4>
+<p><strong>Lazy model loading</strong> via <code>_ensure_model()</code>. The YOLO model is
+not loaded at <code>__init__</code> but only on the first call to <code>process_frame()</code>.
+This allows the system to start up quickly and defer GPU/memory allocation until actually
+needed. The <code>enabled</code> property provides a gate — if the module is disabled,
+no model is loaded at all.</p>
+
+<div class="screenshot-placeholder">
+  <strong>Figure 4.4.1 — YOLO Lazy Loading Pattern</strong>
+  [Screenshot: __init__ sets model=None → process_frame calls _ensure_model() which loads YOLO on first call]
+</div>
+
+<p><strong>Inference:</strong> <code>_detect(frame)</code> runs YOLO with optimisations
+for the Raspberry Pi: <code>device='cpu'</code>, <code>half=False</code>. The method
+iterates over the results, extracting class labels and filtering out those below the
+confidence threshold. Detected objects are deduplicated (each label appears once).</p>
+
+<p><strong>Prompt generation:</strong> <code>_build_prompt(objects, count)</code>
+constructs a human-readable string. For a single object: <em>"a book"</em>;
+for multiple: <em>"a book and a laptop"</em>; with quantity: <em>"2 books and a laptop"</em>.</p>
+
+<!-- ---- 4.5 Scene ---- -->
+<h3>4.5 <code>scene.py</code> — Scene Understanding</h3>
+<p><strong>Purpose:</strong> Segment the frame into meaningful regions using YOLOv8 instance
+segmentation and produce a semantic description of the scene layout (indoor, outdoor, cluttered, etc.).</p>
+
+<h4>Class Hierarchy</h4>
+<ul>
+  <li><code>SceneSegmentationModule</code> — main class</li>
+</ul>
+
+<h4>Key Algorithms</h4>
+<p><strong>Segmentation</strong> uses YOLOv8 with a segmentation head
+(<code>yolov8n-seg.pt</code>). <code>_segment(frame)</code> runs inference, extracts
+segmentation masks alongside bounding boxes and labels. Segments are sorted by area
+(largest first) so the dominant region drives the scene description.</p>
+
+<p><strong>Scene description templates</strong> in <code>_build_scene_description()</code>
+map the dominant segment label to a natural template:</p>
+<ul>
+  <li><code>person</code> → <em>"A person is present in the scene."</em></li>
+  <li><code>chair</code> → <em>"A chair is in the scene, suggesting an indoor setting."</em></li>
+  <li><code>tvmonitor</code> → <em>"A TV or monitor is in view."</em></li>
+  <li><em>etc.</em></li>
+</ul>
+<p>The final description also includes the full list of detected segments and an
+area coverage estimate.</p>
+
+<div class="screenshot-placeholder">
+  <strong>Figure 4.5.1 — Scene Description from YOLO Segments</strong>
+  [Screenshot: Input frame → YOLOv8-seg masks overlaid → sorted by area → template-based description generated]
+</div>
+
+<!-- ---- 4.6 Obstacle ---- -->
+<h3>4.6 <code>obstacle.py</code> — Obstacle Detection via Optical Flow</h3>
+<p><strong>Purpose:</strong> Detect obstacles and their direction of motion relative to
+the camera using Lucas-Kanade sparse optical flow. This is the only module that operates
+on <em>temporal</em> information rather than single-frame analysis.</p>
+
+<h4>Class Hierarchy</h4>
+<ul>
+  <li><code>ObstacleDetector</code> — main class</li>
+</ul>
+
+<h4>Key Algorithms</h4>
+<p><strong>Feature tracking</strong> uses Shi-Tomasi corner detection
+(<code>cv2.goodFeaturesToTrack</code>) to identify trackable points in the first frame,
+then tracks them to the next frame using Lucas-Kanade optical flow
+(<code>cv2.calcOpticalFlowPyrLK</code>). Parameters include quality level, minimum
+distance between corners, and the pyramidal LK window size.</p>
+
+<div class="screenshot-placeholder">
+  <strong>Figure 4.6.1 — Optical Flow Computation for Obstacle Detection</strong>
+  [Screenshot: Frame t → Shi-Tomasi corners → Frame t+1 → LK tracked points → flow vectors drawn]
+</div>
+
+<p><strong>Expansion ratio</strong> estimates whether the camera/object is approaching
+an obstacle. The detector computes the average magnitude and direction of flow vectors.
+If vectors predominantly point outward from the image centre with increasing magnitude,
+the system infers an approaching obstacle (expansion). A threshold on the ratio of
+outward-pointing vectors classifies the direction:</p>
+<ul>
+  <li><strong>stop</strong> — large expansion ratio, vectors radiate outward</li>
+  <li><strong>left</strong> — vectors predominantly flow right (camera moving left)</li>
+  <li><strong>right</strong> — vectors predominantly flow left</li>
+  <li><strong>clear</strong> — negligible flow or random / noisy vectors</li>
+</ul>
+
+<p><strong>Divergence estimation</strong> computes the focus of expansion (FoE) — the
+point from which all flow vectors appear to emanate. A low divergence value (vectors
+converging near centre) combined with high magnitude signals imminent collision.</p>
+
+<div class="screenshot-placeholder">
+  <strong>Figure 4.6.2 — Expansion Ratio and Divergence Estimation</strong>
+  [Screenshot: Flow vectors colour-coded by direction → outward ratio histogram → direction classification output]
+</div>
+
+<p><strong>Smoothing:</strong> <code>_smooth_direction()</code> applies a priority-weighted
+history over the last N frames. The <code>"stop"</code> direction gets the highest priority
+(by design — safety-critical), so even a single "stop" detection persists through the buffer.</p>
+
+<!-- ============================================================ -->
+<h2>5. Code Walkthrough — Screenshot Placeholders</h2>
+
+<table>
+  <tr><th>#</th><th>Area</th><th>Module</th><th>Content</th></tr>
+  <tr><td>1</td><td>LBP embedding computation</td><td>face_tracker</td><td><code>_face_embedding()</code> — resize, LBP, histogram, normalise</td></tr>
+  <tr><td>2</td><td>Face identity matching</td><td>face_tracker</td><td><code>_identify_face()</code> — cosine distance, threshold, UUID lookup</td></tr>
+  <tr><td>3</td><td>Skin mask generation</td><td>gesture</td><td><code>_skin_mask()</code> — HSV threshold + YCrCb threshold + intersection</td></tr>
+  <tr><td>4</td><td>Finger counting convexity</td><td>gesture</td><td><code>_count_fingers()</code> — convex hull, defect depth, finger count logic</td></tr>
+  <tr><td>5</td><td>Emotion CNN forward pass</td><td>emotion</td><td><code>EmotionCNN.forward()</code> — conv blocks → flatten → linear → softmax</td></tr>
+  <tr><td>6</td><td>YOLO lazy loading</td><td>objects</td><td><code>_ensure_model()</code> — None check → YOLO(…) → cached reference</td></tr>
+  <tr><td>7</td><td>Optical flow computation</td><td>obstacle</td><td><code>_detect()</code> — goodFeaturesToTrack → calcOpticalFlowPyrLK → mask</td></tr>
+  <tr><td>8</td><td>Expansion ratio &amp; divergence</td><td>obstacle</td><td>Outward vector ratio, FoE estimation, direction classification</td></tr>
+  <tr><td>9</td><td>Scene description pipeline</td><td>scene</td><td><code>_segment()</code> → area sort → template match → description string</td></tr>
+  <tr><td>10</td><td>Gesture temporal stabilisation</td><td>gesture</td><td><code>_update_stable()</code> — deque buffer → Counter → mode selection</td></tr>
+  <tr><td>11</td><td>Emotion inference loop</td><td>emotion</td><td><code>_detect()</code> — Haar cascade → crop → normalize → CNN → argmax</td></tr>
+  <tr><td>12</td><td>Face tracker frame skip</td><td>face_tracker</td><td><code>process_frame()</code> — counter modulo frame_skip → reuse last result</td></tr>
+  <tr><td>13</td><td>YOLO prompt builder</td><td>objects</td><td><code>_build_prompt()</code> — deduplicate → count → natural language</td></tr>
+  <tr><td>14</td><td>Haar cascade face crop</td><td>emotion</td><td><code>_detect()</code> — cascade.detectMultiScale → ROI extraction</td></tr>
+  <tr><td>15</td><td>Obstacle direction smoothing</td><td>obstacle</td><td><code>_smooth_direction()</code> — priority-weighted history buffer</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2>6. Sequence Flow — Frame Through All Modules</h2>
+
+<p>The following sequence describes what happens when the pipeline processes a single frame:</p>
+
+<div class="flow-diagram">
+<pre>
+VisionPipeline.process_frame(frame):
+  1. if face_tracker.frame_skip counter hits:
+       faces_raw = face_tracker.detect(frame)
+       embeddings = [face_embedding(crop) for each face]
+       identities  = [identify_face(emb) → UUID or register_new]
+       result.faces = identities
+     else:
+       result.faces = previous_result.faces
+
+  2. gesture_result = gesture.process_frame(frame)
+     # skin_mask → contour → count_fingers → verify_pointing
+     # → buffer → majority vote → GESTURE_TO_COMMAND
+
+  3. emotion_result = emotion.process_frame(frame)
+     # haar cascade → crop → CNN → softmax → smooth → label
+
+  4. objects_result = objects.process_frame(frame)
+     # lazy load YOLO → detect → deduplicate → build_prompt
+
+  5. scene_result = scene.process_frame(frame)
+     # lazy load YOLOv8-seg → segment → area sort → template
+
+  6. obstacle_result = obstacle.process_frame(frame)
+     # goodFeaturesToTrack → LK optical flow → expansion ratio
+     # → classify direction → smooth_direction
+
+  7. merged_context = {
+       "faces":       result.faces,
+       "gesture":     gesture_result,
+       "emotion":     emotion_result,
+       "objects":     objects_result,
+       "scene":       scene_result,
+       "obstacle":    obstacle_result,
+       "fps":         pipeline.fps,
+       "timestamp":   pipeline.timestamp
+     }
+
+  8. return merged_context  # → sent to LLM
+</pre>
+</div>
+
+<p><strong>Frame-skip coordination:</strong> Each module has its own independent frame-skip
+counter. The pipeline does not synchronise them — expensive modules (YOLO) may run every
+5th frame while cheap modules (gesture) run every frame. Between runs, modules return
+their last known result, ensuring the context dict always has a value.</p>
+
+<!-- ============================================================ -->
+<h2>7. Folder Integration — Module → VisionPipeline → LLM Context</h2>
+
+<p>The output of the entire pipeline is a single JSON-serialisable dictionary that gets
+injected into the LLM's system prompt as context. This allows the LLM to:</p>
+<ul>
+  <li><strong>Know who it's talking to</strong> (face identity + emotion)</li>
+  <li><strong>Understand user intent</strong> (gesture commands)</li>
+  <li><strong>Describe the environment</strong> (objects + scene segmentation)</li>
+  <li><strong>Navigate safely</strong> (obstacle direction)</li>
+</ul>
+
+<p>Example merged context sent to the LLM:</p>
+<pre>
+{
+  "faces":       [{"uuid": "a1b2c3d4", "label": "user_1"}],
+  "gesture":     "continue",
+  "emotion":     "happy",
+  "objects":     "a book, a laptop and a coffee cup",
+  "scene":       "A chair is in the scene, suggesting an indoor setting. "
+                 "Full segments: person (45%), chair (22%), laptop (12%)",
+  "obstacle_dir": "clear",
+  "fps":         28,
+  "timestamp":   1718123456.78
+}
+</pre>
+
+<div class="info-box">
+<strong>No shared state:</strong> Modules do not communicate with each other directly.
+All inter-module dependencies (e.g. "use face bounding box to improve gesture region")
+are handled by the pipeline if needed, keeping modules independently testable.
+</div>
+
+<!-- ============================================================ -->
+<h2>8. Technical Notes</h2>
+
+<table>
+  <tr><th>Technology</th><th>Used In</th><th>Notes</th></tr>
+  <tr>
+    <td>OpenCV DNN</td><td>face_tracker</td>
+    <td>Caffe-based SSD. Requires deploy.prototxt + .caffemodel. Auto-downloaded via <code>urllib.request</code>.</td>
+  </tr>
+  <tr>
+    <td>YOLOv8 (ultralytics)</td><td>objects, scene</td>
+    <td>Lazy-loaded. CPU inference (<code>device='cpu'</code>, <code>half=False</code>). Detection vs segmentation head differs between modules.</td>
+  </tr>
+  <tr>
+    <td>PyTorch</td><td>emotion</td>
+    <td><code>torch.load</code> with <code>map_location='cpu'</code> for RPi compatibility. <code>strict=False</code> for partial loading.</td>
+  </tr>
+  <tr>
+    <td>Lucas-Kanade Optical Flow</td><td>obstacle</td>
+    <td>Sparse pyramidal LK (<code>cv2.calcOpticalFlowPyrLK</code>). Shi-Tomasi features. Inlier/outlier filtering via <code>status</code> mask.</td>
+  </tr>
+  <tr>
+    <td>Local Binary Patterns (LBP)</td><td>face_tracker</td>
+    <td>Uniform LBP, radius=1, points=8. Histogram normalised to unit L2 length. OpenCV's <code>face.LBPHFaceRecognizer</code> patterns.</td>
+  </tr>
+  <tr>
+    <td>Haar Cascade</td><td>emotion</td>
+    <td>Frontal face cascade. <code>detectMultiScale</code> with <code>scaleFactor=1.1</code>, <code>minNeighbors=5</code>.</td>
+  </tr>
+  <tr>
+    <td>Convexity Defects</td><td>gesture</td>
+    <td><code>cv2.convexityDefects</code> on largest contour. Depth threshold filters shallow defects.</td>
+  </tr>
+</table>
+
+<!-- ============================================================ -->
+<h2>9. Academic Explanation</h2>
+
+<h3>9.1 Algorithm Choice Rationale</h3>
+<p>The system deliberately mixes <strong>traditional computer vision</strong> and
+<strong>deep learning</strong> approaches. This is not an accident — it reflects a
+practical engineering tradeoff between accuracy, latency, and power consumption on
+edge hardware (Raspberry Pi / Jetson Nano).</p>
+
+<table>
+  <tr><th>Module</th><th>Choice</th><th>Alternative</th><th>Why This Choice</th></tr>
+  <tr>
+    <td>Face tracker</td>
+    <td><span class="tag hybrid">Hybrid</span> DNN + LBP</td>
+    <td>Full DNN face recognition (FaceNet, ArcFace)</td>
+    <td>DNN detection gives bounding boxes; LBP recognition is <strong>10× faster</strong> on CPU and needs no GPU. ArcFace would add ~50ms per frame on RPi.</td>
+  </tr>
+  <tr>
+    <td>Gesture</td>
+    <td><span class="tag cv">Pure CV</span> Skin + convexity</td>
+    <td>MediaPipe Hands / DNN keypoint model</td>
+    <td>MediaPipe adds ~30ms per frame and requires an additional model. Skin masking + convexity costs ~8ms, handles 4-5 distinct gestures adequately.</td>
+  </tr>
+  <tr>
+    <td>Emotion</td>
+    <td><span class="tag ml">CNN</span> (PyTorch)</td>
+    <td>Traditional feature-based (HOG + SVM)</td>
+    <td>Emotion classification benefits from learned features. A small CNN (3 conv blocks, ~500K params) runs at 15ms on CPU — acceptable for a 5-10 FPS pipeline.</td>
+  </tr>
+  <tr>
+    <td>Objects</td>
+    <td><span class="tag ml">YOLOv8</span></td>
+    <td>Faster R-CNN, SSD, EfficientDet</td>
+    <td>YOLOv8 nano is the state-of-the-art in efficiency for edge deployment. Single-stage detector with anchor-free design. ~100ms per frame on CPU.</td>
+  </tr>
+  <tr>
+    <td>Scene</td>
+    <td><span class="tag ml">YOLOv8-seg</span></td>
+    <td>DeepLab, PSPNet, Mask R-CNN</td>
+    <td>Shared YOLOv8 backbone with the objects module — model reuse reduces memory. Instance segmentation (not semantic) allows per-object area computation.</td>
+  </tr>
+  <tr>
+    <td>Obstacle</td>
+    <td><span class="tag cv">Pure CV</span> LK Optical Flow</td>
+    <td>Depth from stereo / ToF sensor / monodepth2 DNN</td>
+    <td>Hardware-agnostic: works with any monocular camera. No extra sensor cost. Lucas-Kanade is well-understood, deterministic, and runs in ~5ms.</td>
+  </tr>
+</table>
+
+<h3>9.2 ML vs Traditional CV — Performance Tradeoffs</h3>
+<p><strong>Deep learning</strong> modules (emotion, objects, scene) provide higher accuracy
+but incur non-trivial inference latency. The <code>frame_skip</code> mechanism is essential:
+expensive modules run at 1/5 the frame rate while cheap modules run at full rate.</p>
+
+<p><strong>Traditional CV</strong> modules (gesture, obstacle, face recognition sub-component)
+are deterministic, have predictable latency, and require no training data or model deployment.
+They are also easier to debug — failure modes are rooted in well-understood geometry/optics
+rather than opaque neural activations.</p>
+
+<p><strong>Hybrid approach</strong> (face_tracker) demonstrates how the two paradigms can
+complement each other. The DNN handles the complex task (finding faces in arbitrary poses),
+while the classical descriptor handles the simpler task (comparing faces once cropped).</p>
+
+<h3>9.3 Performance Bottlenecks</h3>
+<ul>
+  <li><strong>YOLOv8 inference</strong> (objects, scene): ~150-250ms per frame on Raspberry Pi 4.
+    Mitigated by frame_skip=5 and running detection and segmentation in separate cycles.</li>
+  <li><strong>Haar cascade + CNN</strong> (emotion): ~20-30ms combined. Acceptable.</li>
+  <li><strong>LBP histogram + cosine distance</strong> (face_tracker): ~2-5ms. Negligible.</li>
+  <li><strong>Skin mask + convexity</strong> (gesture): ~5-10ms. Negligible.</li>
+  <li><strong>Lucas-Kanade optical flow</strong> (obstacle): ~5-10ms. Negligible.</li>
+</ul>
+<p>Total pipeline latency (worst case, all modules active): ~300-400ms → ~2.5-3 FPS.</p>
+
+<h3>9.4 Future Improvements</h3>
+<ul>
+  <li><strong>ONNX Runtime</strong> — Convert YOLOv8 and EmotionCNN to ONNX format for 20-30% faster inference on CPU via <code>onnxruntime</code>.</li>
+  <li><strong>NVIDIA TensorRT</strong> — If deploying on Jetson Nano, compile models to TensorRT engines for 2-3× speedup.</li>
+  <li><strong>Optical flow + depth fusion</strong> — Combine LK flow with monocular depth estimation to distinguish lateral motion from true approach.</li>
+  <li><strong>Multi-scale LBP</strong> — Use multi-radius LBP descriptors for more robust face recognition under varying lighting.</li>
+  <li><strong>Gesture vocabulary expansion</strong> — Add CNN-based gesture classifier alongside the CV pipeline for more gesture types, falling back to CV when confidence is low.</li>
+  <li><strong>Shared YOLO model instance</strong> — objects.py and scene.py could share a single YOLO model with both detection and segmentation heads, reducing memory footprint by ~40%.</li>
+  <li><strong>Frame-skip coordination</strong> — Align frame-skip cycles so expensive models run on alternating frames rather than the same frame, smoothing latency spikes.</li>
+</ul>
+
+<h3>9.5 Academic Context</h3>
+<p>This project sits at the intersection of <strong>assistive robotics</strong> and
+<strong>edge AI</strong>. The design follows principles from:</p>
+<ul>
+  <li><strong>Brooks' subsumption architecture</strong> (1986) — layered, independent
+    behaviours that can be composed without central coordination.</li>
+  <li><strong>R. Szeliski, "Computer Vision: Algorithms and Applications"</strong> —
+    the optical flow, LBP, and Haar cascade implementations are textbook derivations.</li>
+  <li><strong>Redmon et al., "YOLOv3" / Ultralytics YOLOv8</strong> — real-time object
+    detection as a regression problem.</li>
+  <li><strong>Viola &amp; Jones, "Rapid Object Detection using a Boosted Cascade of
+    Simple Features"</strong> (2001) — the Haar cascade used for face detection.</li>
+  <li><strong>Lucas &amp; Kanade, "An Iterative Image Registration Technique"</strong>
+    (1981) — the optical flow algorithm used for obstacle detection.</li>
+</ul>
+
+<hr>
+
+<p style="text-align:center; color:#94a3b8; font-size:0.85rem; margin-top:3rem;">
+&copy; 2026 Graduate Project &mdash; Vision Sub-modules Documentation &mdash; Generated for architecture review
+</p>
+
+</div>
+</body>
+</html>

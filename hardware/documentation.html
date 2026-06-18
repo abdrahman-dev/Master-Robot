@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hardware Abstraction Layer Documentation — Rope</title>
+<style>
+  @page { margin: 20mm 15mm; size: A4; }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    font-size: 11pt; line-height: 1.6; color: #1a1a1a;
+    max-width: 210mm; margin: 0 auto; padding: 20mm 15mm;
+    background: #fff;
+  }
+  h1 { font-size: 24pt; margin-bottom: 0.3em; color: #0d47a1; border-bottom: 3px solid #0d47a1; padding-bottom: 0.3em; }
+  h2 { font-size: 16pt; margin: 1.5em 0 0.5em; color: #1565c0; border-bottom: 1px solid #bbdefb; padding-bottom: 0.2em; }
+  h3 { font-size: 13pt; margin: 1.2em 0 0.4em; color: #1976d2; }
+  h4 { font-size: 11pt; margin: 1em 0 0.3em; color: #1e88e5; }
+  p { margin-bottom: 0.7em; text-align: justify; }
+  ul, ol { margin: 0.5em 0 0.7em 1.8em; }
+  li { margin-bottom: 0.25em; }
+  code { font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace; font-size: 9.5pt; background: #f5f5f5; padding: 0.1em 0.35em; border-radius: 3px; border: 1px solid #e0e0e0; }
+  pre {
+    font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace; font-size: 9pt;
+    background: #f8f9fa; border: 1px solid #dee2e6; border-left: 4px solid #0d47a1;
+    border-radius: 4px; padding: 0.8em 1em; overflow-x: auto; margin: 0.6em 0;
+    line-height: 1.45; tab-size: 4;
+  }
+  pre code { background: none; border: none; padding: 0; font-size: inherit; }
+  table { width: 100%; border-collapse: collapse; margin: 0.8em 0; }
+  th, td { border: 1px solid #dee2e6; padding: 0.45em 0.7em; text-align: left; vertical-align: top; }
+  th { background: #e3f2fd; font-weight: 600; color: #0d47a1; }
+  tr:nth-child(even) td { background: #f8fbff; }
+  .note {
+    background: #fff8e1; border-left: 4px solid #ffa000; padding: 0.7em 1em;
+    margin: 0.8em 0; border-radius: 0 4px 4px 0;
+  }
+  .note::before { content: "\26A0 Note: "; font-weight: 700; color: #e65100; }
+  .info {
+    background: #e3f2fd; border-left: 4px solid #0d47a1; padding: 0.7em 1em;
+    margin: 0.8em 0; border-radius: 0 4px 4px 0;
+  }
+  .diagram {
+    background: #fafafa; border: 1px solid #ddd; border-radius: 6px;
+    padding: 1.2em; margin: 1em 0; text-align: center; font-family: 'Cascadia Code', monospace;
+    font-size: 10pt; line-height: 1.8;
+  }
+  .diagram .arrow { color: #666; }
+  .diagram .box { display: inline-block; background: #e3f2fd; border: 2px solid #1565c0; border-radius: 6px; padding: 0.3em 0.8em; margin: 0.1em 0; font-weight: 600; color: #0d47a1; }
+  .diagram .box-serial { background: #fff3e0; border-color: #e65100; color: #bf360c; }
+  .diagram .box-esp { background: #e8f5e9; border-color: #2e7d32; color: #1b5e20; }
+  .diagram .box-motor { background: #fce4ec; border-color: #c62828; color: #b71c1c; }
+  .diagram .label { color: #555; font-size: 9pt; }
+  .screenshot-placeholder {
+    background: linear-gradient(135deg, #f5f5f5 0%, #e8e8e8 100%);
+    border: 2px dashed #bbb; border-radius: 8px; padding: 2em; margin: 1em 0;
+    text-align: center; color: #777; font-style: italic;
+  }
+  .screenshot-placeholder strong { color: #555; display: block; font-size: 11pt; margin-bottom: 0.3em; font-style: normal; }
+  .method-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5em 1.5em; margin: 0.5em 0; }
+  @media print {
+    body { padding: 0; max-width: none; }
+    .screenshot-placeholder { break-inside: avoid; page-break-inside: avoid; border-style: solid; }
+    h1, h2, h3 { break-after: avoid; page-break-after: avoid; }
+    pre, table { break-inside: avoid; page-break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+
+<h1>Hardware Abstraction Layer Documentation</h1>
+<p><strong>Project:</strong> Rope — Voice-Controlled Robot Car &nbsp;|&nbsp; <strong>Module:</strong> <code>hardware/</code> &nbsp;|&nbsp; <strong>Version:</strong> 1.0.0</p>
+
+<!-- ====== SECTION 1: FOLDER PURPOSE ====== -->
+<h2>1. Folder Purpose</h2>
+<p>
+The <code>hardware/</code> package provides a clean <strong>Hardware Abstraction Layer (HAL)</strong>
+that isolates the rest of the Rope application from the low-level details of motor control.
+All physical hardware interaction — namely commanding the robot's DC motors — is
+funnelled through a single, well-defined interface: the <code>MotorController</code> class.
+</p>
+<p>This abstraction serves three critical goals:</p>
+<ul>
+  <li><strong>Separation of concerns:</strong> Voice processing, intent routing, and application logic in <code>main.py</code> never deal with serial bytes, UART configuration, or motor electrical specs.</li>
+  <li><strong>Graceful degradation:</strong> If no physical hardware is connected or the <code>pyserial</code> library is unavailable, the motor controller degrades gracefully — every method becomes a no-op that returns <code>False</code> — and the robot continues operating as a pure voice assistant.</li>
+  <li><strong>Testability &amp; swappability:</strong> A mock or simulator can replace the real controller without changing any calling code, enabling unit testing of the voice pipeline without hardware.</li>
+</ul>
+<p>
+The package communicates with an <strong>ESP32 microcontroller</strong> over a <strong>UART serial link</strong>
+(typically <code>/dev/ttyS0</code> on a Raspberry Pi). The ESP32 interprets a simple text-based command
+protocol and drives the motor driver IC (e.g. L298N or TB6612) with appropriate PWM signals.
+</p>
+
+<div class="info">
+<strong>Key files:</strong> <code>__init__.py</code> (package re-export) and <code>motor_controller.py</code> (the HAL implementation).
+</div>
+
+<!-- ====== SECTION 2: ARCHITECTURE OVERVIEW ====== -->
+<h2>2. Architecture Overview</h2>
+<p>
+The data flow from a user's voice command to the spinning motors traverses these layers:
+</p>
+
+<div class="diagram">
+<pre style="border:none; background:none; padding:0; margin:0; text-align:center; font-size:10pt;">
+<span class="box">main.py</span>
+    <span class="arrow">&#9660;</span>  (calls MotorController API)
+<span class="box">MotorController</span>  <span style="color:#888;">(HAL)</span>
+    <span class="arrow">&#9660;</span>  (writes ASCII commands via pyserial)
+<span class="box box-serial">UART Serial</span>  <span style="color:#888;">(/dev/ttyS0 — 115200 baud)</span>
+    <span class="arrow">&#9660;</span>  (physical TX/RX lines)
+<span class="box box-esp">ESP32</span>  <span style="color:#888;">(parses commands, generates PWM)</span>
+    <span class="arrow">&#9660;</span>  (motor driver signals)
+<span class="box box-motor">DC Motors</span>
+</pre>
+</div>
+
+<ol>
+  <li><strong>Application layer</strong> (<code>main.py</code>) receives a transcribed voice command, classifies the intent ("move forward", "turn left", "stop", etc.), and calls the appropriate <code>MotorController</code> method.</li>
+  <li><strong>HAL layer</strong> (<code>MotorController</code>) serialises the high-level request into a short ASCII string (e.g. <code>"F2000\n"</code>) and writes it to the serial port.</li>
+  <li><strong>Physical layer</strong> (UART) transports the bytes electrically via TX/RX at 115&nbsp;200&nbsp;baud.</li>
+  <li><strong>Firmware layer</strong> (ESP32) receives the string, validates it, sets the appropriate motor driver pins, and applies PWM for speed control.</li>
+  <li><strong>Actuator layer</strong> (DC motors) convert electrical energy into mechanical rotation.</li>
+</ol>
+
+<div class="note">
+When hardware is unavailable, layers 3–5 are skipped. The HAL returns <code>False</code>, and
+the application continues running without crashing.
+</div>
+
+<!-- ====== SECTION 3: FILES OVERVIEW TABLE ====== -->
+<h2>3. Files Overview</h2>
+<table>
+<thead>
+<tr><th>File</th><th>Lines</th><th>Role</th></tr>
+</thead>
+<tbody>
+<tr>
+  <td><code>__init__.py</code></td>
+  <td>2</td>
+  <td>Package initialiser; imports and re-exports <code>MotorController</code> so consumers write <code>from hardware import MotorController</code>.</td>
+</tr>
+<tr>
+  <td><code>motor_controller.py</code></td>
+  <td>76</td>
+  <td>Core HAL implementation. Defines the <code>MotorController</code> class with serial setup, command encoding, and graceful degradation.</td>
+</tr>
+</tbody>
+</table>
+
+<!-- ====== SECTION 4: DETAILED FILE EXPLANATIONS ====== -->
+<h2>4. Detailed File Explanations</h2>
+
+<h3>4.1 <code>__init__.py</code> — Package Entry Point</h3>
+<p>
+This two-line file serves as the public API surface of the <code>hardware</code> package.
+By importing <code>MotorController</code> from the implementation module and listing it in
+<code>__all__</code>, it hides the internal module structure from consumers:
+</p>
+<pre><code>from hardware.motor_controller import MotorController
+__all__ = ["MotorController"]</code></pre>
+<p>
+Any code that wishes to control the robot's motors does so through this single import:
+<code>from hardware import MotorController</code>. If the internal module is ever refactored
+(split, renamed, etc.), only <code>__init__.py</code> needs to change — all consumers remain untouched.
+</p>
+
+<h3>4.2 <code>motor_controller.py</code> — MotorController Class</h3>
+
+<h4>4.2.1 Constructor — <code>__init__(self, port, baudrate, timeout)</code></h4>
+<p>
+Accepts three configuration parameters with sensible defaults targeting a Raspberry Pi
+connected to an ESP32 via the primary UART (<code>/dev/ttyS0</code>, 115&nbsp;200&nbsp;baud, 1&nbsp;s timeout).
+The constructor <strong>never raises an exception</strong> — this is the cornerstone of the graceful
+degradation pattern:
+</p>
+<ul>
+  <li>It attempts to import <code>serial</code> (pyserial). If the library is absent, a warning is logged and <code>self._available</code> stays <code>False</code>.</li>
+  <li>It attempts to open the serial port. If the port does not exist, is busy, or any other <code>Exception</code> occurs, the error is logged and <code>self._available</code> stays <code>False</code>.</li>
+  <li>If everything succeeds, <code>self._available</code> is set to <code>True</code> and an informational message confirms the connection.</li>
+</ul>
+
+<h4>4.2.2 <code>is_available()</code></h4>
+<p>Returns <code>True</code> if the serial port is connected and operational, <code>False</code> otherwise. Callers can use this to check hardware status at runtime.</p>
+
+<h4>4.2.3 <code>_send(command)</code> — Internal Command Writer</h4>
+<p>
+The single private method through which every public command passes. It:
+</p>
+<ol>
+  <li>Guards with <code>if not self._available or self._serial is None: return False</code> — all calls become harmless no-ops when hardware is absent.</li>
+  <li>Encodes the command string as UTF-8 with a trailing newline delimiter.</li>
+  <li>Writes the encoded bytes to the serial port via <code>pyserial.Serial.write()</code>.</li>
+  <li>Sleeps 50&nbsp;ms to allow the ESP32 to process the command before the next one arrives (prevents RX buffer overrun on the microcontroller).</li>
+  <li>Returns <code>True</code> on success, logs a warning and returns <code>False</code> on any <code>Exception</code>.</li>
+</ol>
+
+<h4>4.2.4 Movement Commands</h4>
+<table>
+<thead>
+<tr><th>Method</th><th>Command Sent</th><th>Behaviour</th></tr>
+</thead>
+<tbody>
+<tr><td><code>forward(ms)</code></td><td><code>F</code> or <code>F&lt;ms&gt;</code></td><td>Drive both motors forward. Optional duration in milliseconds.</td></tr>
+<tr><td><code>backward(ms)</code></td><td><code>B</code> or <code>B&lt;ms&gt;</code></td><td>Drive both motors in reverse. Optional duration.</td></tr>
+<tr><td><code>turn_left(ms)</code></td><td><code>L</code> or <code>L&lt;ms&gt;</code></td><td>Rotate left (differential drive). Optional duration.</td></tr>
+<tr><td><code>turn_right(ms)</code></td><td><code>R</code> or <code>R&lt;ms&gt;</code></td><td>Rotate right. Optional duration.</td></tr>
+<tr><td><code>stop()</code></td><td><code>S</code></td><td>Brake both motors immediately.</td></tr>
+<tr><td><code>set_speed(speed)</code></td><td><code>SPD:&lt;0-255&gt;</code></td><td>Set PWM duty cycle (clamped to 0–255).</td></tr>
+</tbody>
+</table>
+<p>Each public method delegates to <code>_send</code> with a single-character command prefix. Movement methods with <code>duration_ms &gt; 0</code> append the value (e.g. <code>F2000</code> for a 2-second forward move).</p>
+
+<h4>4.2.5 <code>set_speed(speed)</code></h4>
+<p>
+Accepts an integer from 0 to 255 (the PWM resolution of the ESP32's LEDC peripheral).
+The value is clamped with <code>max(0, min(255, int(speed)))</code> so out-of-range values are
+silently corrected rather than causing errors. The command format is <code>SPD:128</code>.
+</p>
+
+<h4>4.2.6 <code>close()</code></h4>
+<p>
+Gracefully shuts down the serial connection. Checks <code>self._serial.is_open</code> before
+calling <code>close()</code> to avoid redundant or erroneous operations. Sets <code>self._available</code>
+to <code>False</code> so all subsequent commands are no-ops. This method is safe to call multiple times.
+</p>
+
+<h3>4.3 Graceful Degradation Pattern</h3>
+<p>
+The most important architectural decision in this module: <strong>no hardware exception
+should crash the application</strong>. Every external operation — library import, port open,
+serial write — is wrapped in <code>try/except</code> with detailed logging but no re-raise.
+</p>
+<p>
+This means Rope can be developed, tested, and demoed entirely without a physical robot.
+The voice assistant, NLP pipeline, and all response logic remain fully functional.
+When the robot chassis is connected (e.g. during deployment on a Raspberry Pi), the
+exact same binary drives the motors — no code changes needed.
+</p>
+
+<h3>4.4 Command Protocol</h3>
+<p>
+The text-based protocol is deliberately minimal and human-readable, making debugging
+with a serial monitor (e.g. <code>screen</code>, <code>putty</code>, Arduino IDE Serial Monitor) trivial:
+</p>
+<table>
+<thead><tr><th>Prefix</th><th>Example</th><th>ESP32 Action</th></tr></thead>
+<tbody>
+  <tr><td><code>F</code></td><td><code>F1500</code></td><td>Set direction pins Forward, apply PWM for 1500 ms (or indefinitely if no duration).</td></tr>
+  <tr><td><code>B</code></td><td><code>B</code></td><td>Set direction pins Backward.</td></tr>
+  <tr><td><code>L</code></td><td><code>L800</code></td><td>Set left/right differential (one motor forward, one backward).</td></tr>
+  <tr><td><code>R</code></td><td><code>R</code></td><td>Opposite differential for right turn.</td></tr>
+  <tr><td><code>S</code></td><td><code>S</code></td><td>Disable both motor channels (coast or brake depending on driver).</td></tr>
+  <tr><td><code>SPD:</code></td><td><code>SPD:200</code></td><td>Update PWM duty cycle register; subsequent moves use the new speed.</td></tr>
+</tbody>
+</table>
+<p>Each command is terminated by <code>\n</code> (LF). The ESP32's firmware reads until newline, parses the prefix, and executes the action.</p>
+
+<h3>4.5 Exception Handling Strategy</h3>
+<p>The module follows a strict <strong>"log, don't throw"</strong> policy:</p>
+<ul>
+  <li><strong>Constructor:</strong> Catches <code>ImportError</code> (pyserial not installed) and generic <code>Exception</code> (port busy, permission denied, etc.). Logs at <code>WARNING</code> level.</li>
+  <li><strong>_send:</strong> Catches generic <code>Exception</code> (disconnected cable, serial port error). Logs at <code>WARNING</code> level.</li>
+  <li><strong>close:</strong> Catches generic <code>Exception</code>. Logs at <code>WARNING</code> level.</li>
+</ul>
+<p>All logging uses Python's standard <code>logging</code> module with the logger name <code>__name__</code> (i.e. <code>hardware.motor_controller</code>), enabling hierarchical log configuration from the application.</p>
+
+<!-- ====== SECTION 5: CODE WALKTHROUGH ====== -->
+<h2>5. Code Walkthrough</h2>
+
+<div class="screenshot-placeholder">
+  <strong>[Screenshot 1 — Initialisation &amp; Graceful Degradation]</strong>
+  The constructor's tri-state initialisation logic. Highlight the three code paths:
+  (a) pyserial missing → warn, (b) serial open fails → warn, (c) success → info.
+  <br><em>(Insert screenshot of lines 8–18 here)</em>
+</div>
+
+<div class="screenshot-placeholder">
+  <strong>[Screenshot 2 — The _send Gateway]</strong>
+  The private _send method showing the guard clause, UTF-8 encoding, write call,
+  50 ms sleep, and the return True/False pattern.
+  <br><em>(Insert screenshot of lines 24–31 here)</em>
+</div>
+
+<div class="screenshot-placeholder">
+  <strong>[Screenshot 3 — Public Movement API]</strong>
+  The six movement methods (forward, backward, turn_left, turn_right, stop, set_speed)
+  demonstrating how each constructs its command string and delegates to _send.
+  <br><em>(Insert screenshot of lines 33–44 here)</em>
+</div>
+
+<div class="screenshot-placeholder">
+  <strong>[Screenshot 4 — Clean Shutdown]</strong>
+  The close() method illustrating the is_open guard and the final _available = False.
+  <br><em>(Insert screenshot of lines 46–52 here)</em>
+</div>
+
+<div class="screenshot-placeholder">
+  <strong>[Screenshot 5 — Package __init__.py]</strong>
+  The two-line public API re-export in __init__.py.
+  <br><em>(Insert screenshot of __init__.py here)</em>
+</div>
+
+<!-- ====== SECTION 6: SEQUENCE FLOW ====== -->
+<h2>6. Sequence Flow — Voice Command to Motor</h2>
+<p>This section traces the journey of the Arabic voice command <strong>"تعالي"</strong> ("Come here") through the entire system until the robot moves forward.</p>
+
+<ol>
+  <li><strong>Microphone capture:</strong> The application records audio via the microphone (e.g. <code>speech_recognition</code> or PyAudio).</li>
+  <li><strong>Speech-to-text:</strong> The raw audio is sent to a speech recognition engine (Google Speech API, Whisper, Vosk, etc.) which returns the transcribed text <code>"تعالي"</code>.</li>
+  <li><strong>Intent classification:</strong> The NLP pipeline (typically in <code>main.py</code> or a <code>nlp/</code> module) classifies the Arabic text. "تعالي" maps to the intent <code>MOVE_FORWARD</code>.</li>
+  <li><strong>Action routing:</strong> The intent router calls <code>motor_controller.forward(duration_ms=2000)</code>.</li>
+  <li><strong>Command encoding:</strong> <code>forward(2000)</code> calls <code>_send("F2000")</code>.</li>
+  <li><strong>Serial transmission:</strong> <code>_send</code> encodes <code>"F2000\n"</code> as UTF-8 and writes the 6 bytes to <code>/dev/ttyS0</code>.</li>
+  <li><strong>ESP32 reception:</strong> The ESP32's firmware receives the bytes, buffers them until <code>\n</code>, parses <code>F</code> as "forward" and <code>2000</code> as the duration.</li>
+  <li><strong>PWM generation:</strong> The ESP32 sets the motor driver's IN1/IN2 pins for forward direction and applies the configured PWM duty cycle to the enable pin.</li>
+  <li><strong>Motor actuation:</strong> The motor driver delivers power to the DC motors, and the robot moves forward for 2 seconds then stops.</li>
+</ol>
+
+<div class="note">
+If any step in the hardware path fails (no ESP32, disconnected cable, flat battery),
+the error is caught by <code>_send</code>, logged, and <code>False</code> is returned. The voice assistant
+can then respond with an Arabic error message like "عذراً، هناك مشكلة في المحركات".
+</div>
+
+<!-- ====== SECTION 7: FOLDER INTEGRATION ====== -->
+<h2>7. Folder Integration</h2>
+
+<h3>7.1 How the Voice Pipeline Uses MotorController</h3>
+<p>
+The voice pipeline (typically managed by <code>main.py</code>) follows this pseudo-code pattern:
+</p>
+<pre><code>from hardware import MotorController
+
+motor = MotorController()
+
+def on_command(transcribed_text: str):
+    intent = classify_intent(transcribed_text)  # "MOVE_FORWARD"
+    if intent == "MOVE_FORWARD":
+        motor.forward(2000)
+        speak("أتقدم للأمام")
+    elif intent == "TURN_LEFT":
+        motor.turn_left(1000)
+        speak("أتجه يساراً")
+    elif intent == "STOP":
+        motor.stop()
+        speak("توقفت")
+    # ... etc</code></pre>
+<p>
+The <code>MotorController</code> instance is created at startup (or lazily on first command).
+It is passed to, or imported by, the command routing component. Because the controller
+never raises, the pipeline never needs to wrap motor calls in try/except blocks.
+</p>
+
+<h3>7.2 Relationship to main.py</h3>
+<p>
+<code>main.py</code> is the application entry point. It orchestrates:
+</p>
+<ul>
+  <li>Microphone initialisation and continuous listening loop.</li>
+  <li>Audio transcription (speech-to-text).</li>
+  <li>Intent classification (NLP model inference).</li>
+  <li><strong>Motor control dispatch</strong> — calling <code>MotorController</code> methods based on classified intent.</li>
+  <li>Text-to-speech response generation.</li>
+</ul>
+<p>
+The <code>hardware/</code> package is one of several modules <code>main.py</code> imports. Others may include
+<code>nlp/</code> (intent classification), <code>audio/</code> (recording and playback), and <code>config/</code> (settings).
+The separation ensures that swapping the hardware layer (e.g. using ROS2, or a different
+microcontroller) requires changes only within <code>hardware/</code>, leaving the rest of the system intact.
+</p>
+
+<!-- ====== SECTION 8: TECHNICAL NOTES ====== -->
+<h2>8. Technical Notes</h2>
+
+<h3>8.1 pyserial Library</h3>
+<p>
+<a href="https://pypi.org/project/pyserial/" target="_blank"><code>pyserial</code></a> is the de-facto
+Python library for serial communication. Installed via <code>pip install pyserial</code>. It provides
+a <code>Serial</code> class with platform-independent read/write semantics. On Linux, the default port
+<code>/dev/ttyS0</code> corresponds to the hardware UART on the Raspberry Pi's GPIO pins 14 (TX) and 15 (RX).
+The import is done inside the constructor (rather than at the top of the module) so that the
+class can be imported and instantiated even when pyserial is not installed — this is essential
+for the graceful degradation pattern.
+</p>
+
+<h3>8.2 UART Protocol</h3>
+<table>
+<thead><tr><th>Parameter</th><th>Value</th></tr></thead>
+<tbody>
+  <tr><td>Baud rate</td><td>115&nbsp;200</td></tr>
+  <tr><td>Data bits</td><td>8</td></tr>
+  <tr><td>Parity</td><td>None</td></tr>
+  <tr><td>Stop bits</td><td>1</td></tr>
+  <tr><td>Flow control</td><td>None</td></tr>
+  <tr><td>Encoding</td><td>UTF-8 (ASCII-subset commands)</td></tr>
+  <tr><td>Message terminator</td><td><code>\n</code> (LF, 0x0A)</td></tr>
+</tbody>
+</table>
+<p>
+The 50&nbsp;ms sleep after each write is a simple software-based flow-control mechanism.
+At 115&nbsp;200&nbsp;baud (~11&nbsp;500&nbsp;bytes/second), a 6-byte command takes ~0.5&nbsp;ms to transmit.
+The 50&nbsp;ms delay gives the ESP32 ample time to parse and execute before the next command arrives,
+eliminating the need for hardware flow control (RTS/CTS) or XON/XOFF.
+</p>
+
+<h3>8.3 Timeout Management</h3>
+<p>
+The serial port is configured with a read timeout of 1 second (default parameter value).
+Although the current implementation is write-only, the timeout protects against blocking
+behaviour if future versions add read-back of acknowledgements or sensor data from the ESP32.
+The timeout is configurable via the constructor for advanced use cases.
+</p>
+
+<!-- ====== SECTION 9: ACADEMIC EXPLANATION ====== -->
+<h2>9. Academic Explanation — Design Rationale</h2>
+
+<h3>9.1 Why a Hardware Abstraction Layer?</h3>
+<p>
+In embedded-adjacent systems (a Raspberry Pi controlling a robot via a microcontroller),
+the hardware interface is notoriously brittle: serial ports have platform-specific paths,
+drivers require precise timing, and physical connections can fail at any moment.
+A HAL insulates the application logic from this fragility.
+</p>
+<p>
+This architectural pattern is widely known as the <strong>Adapter pattern</strong> (GoF) or
+<strong>Device Driver pattern</strong> in embedded systems literature. The <code>MotorController</code>
+class acts as an adapter between the application's domain language ("move forward",
+"turn left", "speed up") and the hardware's electrical language (UART bytes, PWM signals).
+</p>
+
+<h3>9.2 Graceful Degradation as a Design Principle</h3>
+<p>
+Graceful degradation (also called <em>fail-soft</em> behaviour) is a core tenet of robust
+systems design. Rather than crashing when a subsystem is unavailable, the system continues
+to provide as much functionality as possible. In Rope's case, losing the motors should not
+silence the voice assistant — the robot can still hear, understand, and speak, even if it
+cannot move. The user receives audible feedback about the hardware limitation.
+</p>
+<p>
+This is implemented through the <strong>Null Object pattern</strong>: when the motor controller
+is unavailable, every method returns a safe default value (<code>False</code>) instead of raising
+an exception or producing a side effect. The calling code does not need to check
+<code>is_available()</code> before every call, reducing coupling and cognitive load.
+</p>
+
+<h3>9.3 Extensibility for Future Hardware</h3>
+<p>
+The HAL design makes it straightforward to add new hardware capabilities without
+restructuring the application:
+</p>
+<ul>
+  <li><strong>New actuator types</strong> (servo, stepper, LED strip): Add a new class (e.g. <code>ServoController</code>) in <code>hardware/</code>, export it from <code>__init__.py</code>, and call it from <code>main.py</code>.</li>
+  <li><strong>Sensor input</strong> (ultrasonic distance, line-follower, IMU): Extend <code>MotorController</code> or create a <code>SensorController</code> with read-back via the same serial link. The <code>_send</code> method already returns <code>bool</code> — a future <code>_read</code> method could return sensor values.</li>
+  <li><strong>Alternative communication</strong> (I²C, Bluetooth, Wi-Fi): Create a new controller that implements the same method signatures but communicates over a different transport. The rest of the application never knows the difference.</li>
+  <li><strong>Simulation</strong>: A <code>MockMotorController</code> can log commands instead of sending them, enabling automated testing and CI without hardware.</li>
+</ul>
+
+<h3>9.4 Command Protocol Rationale</h3>
+<p>
+The ASCII text protocol (<code>F</code>, <code>B</code>, <code>L</code>, <code>R</code>, <code>S</code>, <code>SPD:N</code>) was chosen over a
+binary protocol for two reasons. First, <strong>debuggability</strong>: a developer can observe
+commands in real-time with any serial terminal. Second, <strong>firmware simplicity</strong>:
+parsing single-character commands with <code>strncmp</code> or a <code>switch</code> statement on the ESP32
+requires minimal code and RAM, leaving more resources for other tasks (e.g. sensor polling
+or battery monitoring in future iterations).
+</p>
+
+<h3>9.5 Comparison with Alternative Approaches</h3>
+<table>
+<thead><tr><th>Approach</th><th>Pros</th><th>Cons</th></tr></thead>
+<tbody>
+  <tr>
+    <td><strong>Direct GPIO (RPi.GPIO)</strong></td>
+    <td>No microcontroller needed; lower BOM cost.</td>
+    <td>Non-realtime OS can miss timing; limited PWM accuracy; ties motors to specific Pi model.</td>
+  </tr>
+  <tr>
+    <td><strong>I²C motor driver</strong></td>
+    <td>Multi-device bus; well-supported in Python.</td>
+    <td>More complex wiring; slower than UART for simple commands.</td>
+  </tr>
+  <tr>
+    <td><strong>ROS2 / micro-ROS</strong></td>
+    <td>Industry standard; rich ecosystem.</td>
+    <td>Heavyweight for a single-robot project; steep learning curve; significant overhead on Pi Zero-class hardware.</td>
+  </tr>
+  <tr>
+    <td><strong>UART + text protocol (this project)</strong></td>
+    <td>Simple, debuggable, platform-independent, minimal firmware requirements.</td>
+    <td>Requires external microcontroller; limited to <code>bool</code> return value without acknowledge protocol.</td>
+  </tr>
+</tbody>
+</table>
+
+<!-- ====== FOOTER ====== -->
+<hr style="margin-top: 3em; border: none; border-top: 1px solid #e0e0e0;">
+<p style="font-size: 9pt; color: #888; text-align: center;">
+  Rope — Voice-Controlled Robot Car &nbsp;|&nbsp; Hardware Abstraction Layer Documentation &nbsp;|&nbsp;
+  Generated June 2026 &nbsp;|&nbsp;
+  <code style="background:none; border:none; font-size:inherit;">hardware/documentation.html</code>
+</p>
+
+</body>
+</html>

@@ -1,0 +1,636 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Ropo Educational Robot — System Documentation</title>
+<style>
+  @page { margin: 2cm; }
+  * { box-sizing: border-box; }
+  body {
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    line-height: 1.7;
+    max-width: 900px; margin: 0 auto; padding: 2rem 1.5rem;
+    color: #1a1a1a; background: #fafafa;
+  }
+  h1, h2, h3, h4 { color: #0a2a44; margin-top: 1.8em; }
+  h1 { border-bottom: 3px solid #0a2a44; padding-bottom: 0.3em; font-size: 2.2em; text-align: center; margin-top: 0.5em; }
+  h2 { border-bottom: 2px solid #ccc; padding-bottom: 0.2em; font-size: 1.6em; }
+  h3 { font-size: 1.2em; }
+  a { color: #1a6fb5; }
+  code, pre { font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace; font-size: 0.9em; }
+  pre { background: #1e1e1e; color: #dcdcdc; padding: 1em; border-radius: 6px; overflow-x: auto; font-size: 0.82em; line-height: 1.5; }
+  code { background: #e8e8e8; padding: 0.1em 0.4em; border-radius: 3px; }
+  pre code { background: transparent; padding: 0; }
+  table { border-collapse: collapse; width: 100%; margin: 1em 0; font-size: 0.9em; }
+  th, td { border: 1px solid #bbb; padding: 0.5em 0.7em; text-align: left; vertical-align: top; }
+  th { background: #0a2a44; color: #fff; font-weight: 600; }
+  tr:nth-child(even) { background: #f0f4f8; }
+  .screenshot { background: #e0e0e0; border: 2px dashed #999; border-radius: 8px; padding: 2em 1em; text-align: center; margin: 1.5em 0; color: #555; font-style: italic; }
+  .toc { background: #eef4fa; border: 1px solid #bcd; border-radius: 6px; padding: 1em 1.5em; margin: 1.5em 0; }
+  .toc ul { margin: 0.3em 0; padding-left: 1.5em; }
+  .arch-diagram { background: #f8f8f8; border: 1px solid #ddd; border-radius: 6px; padding: 1.2em; margin: 1.5em 0; font-family: monospace; white-space: pre; font-size: 0.8em; line-height: 1.4; overflow-x: auto; }
+  .note { background: #fffbe6; border-left: 4px solid #f0c040; padding: 0.5em 1em; margin: 1em 0; }
+  .warn { background: #fff0f0; border-left: 4px solid #e04040; padding: 0.5em 1em; margin: 1em 0; }
+  .seq-diagram { background: #f5f5f5; border: 1px solid #ccc; border-radius: 6px; padding: 1.2em; margin: 1.5em 0; font-family: monospace; font-size: 0.82em; line-height: 1.5; overflow-x: auto; }
+  .page-break { page-break-before: always; }
+  @media print { body { padding: 0; font-size: 11pt; } pre { font-size: 8pt; } .screenshot { border: 1px solid #aaa; } }
+</style>
+</head>
+<body>
+
+<h1>Ropo Educational Robot — System Documentation</h1>
+
+<p style="text-align:center; color:#555; margin-top:-0.5em;">
+  Graduation Project — Senior Software Architecture<br>
+  <em>AI-Powered Interactive Educational Robot with Bilingual Voice &amp; Vision Pipelines</em>
+</p>
+
+<!-- ============== TABLE OF CONTENTS ============== -->
+<div class="toc">
+<strong>Table of Contents</strong>
+<ul>
+  <li>1. Project Overview</li>
+  <li>2. Architecture Overview</li>
+  <li>3. Files Overview Table</li>
+  <li>4. Detailed File Explanations</li>
+  <li>5. Code Walkthrough</li>
+  <li>6. Sequence Flow</li>
+  <li>7. Folder Integration</li>
+  <li>8. Technical Notes</li>
+  <li>9. Academic Explanation</li>
+</ul>
+</div>
+
+<!-- ============== 1. PROJECT OVERVIEW ============== -->
+<h2>1. Project Overview</h2>
+
+<p><strong>Ropo</strong> is an interactive bilingual (Arabic/English) educational robot that combines a voice conversation pipeline, real-time computer vision, an animated facial display, and motor control into a single cohesive system. Designed to run on a <strong>Raspberry Pi 4/5</strong> or a <strong>Windows desktop</strong> during development, Ropo serves as a platform for classroom interactions, STEM education, and human–robot interaction research.</p>
+
+<h3>Core Features</h3>
+<ul>
+  <li><strong>Voice Pipeline</strong> — Silero VAD + Google ASR + OpenRouter LLM + edge-tts TTS in a real-time streaming architecture</li>
+  <li><strong>Vision Pipeline</strong> — Face tracking (OpenCV DNN), gesture recognition (MediaPipe), emotion detection (CNN), object detection (YOLOv8n), obstacle detection, scene segmentation (YOLOv8n-seg)</li>
+  <li><strong>Animated Face</strong> — Pygame-based display with five states: IDLE, LISTENING, THINKING, SPEAKING, CURIOUS</li>
+  <li><strong>Motor Control</strong> — Serial communication with ESP32/Arduino for physical movement (forward, backward, turn, stop)</li>
+  <li><strong>Session Memory</strong> — SQLite-backed conversation history with sliding-window + summarization for context</li>
+  <li><strong>Adaptive Load Shedding</strong> — Runtime vision-profile switching (minimal / balanced / full) for thermal management</li>
+  <li><strong>Remote Shutdown</strong> — Web API polling client for safe Raspberry Pi shutdown from a mobile app backend</li>
+  <li><strong>Diagnostic Suite</strong> — Comprehensive health check covering platform, packages, model files, network, live module tests, and integration</li>
+</ul>
+
+<h3>Architecture Summary</h3>
+<p>Ropo follows a <strong>modular pipeline architecture</strong> orchestrated by a single entry point (<code>main.py</code>). Each subsystem (voice, vision, LLM, face, hardware) is an independent module communicating via <strong>dependency injection</strong> and <strong>callback-based observation</strong>. The voice pipeline runs on two threads (audio capture + segment processing); the vision pipeline runs on its own thread; and the Pygame face runs on the main thread. Modules share context through a <strong>shared-context dictionary</strong> pattern rather than direct coupling.</p>
+
+<!-- ============== 2. ARCHITECTURE OVERVIEW ============== -->
+<h2>2. Architecture Overview</h2>
+
+<p>The following diagram illustrates every module initialized by <code>main.py</code> and the directional data flow between them.</p>
+
+<div class="arch-diagram">
+┌──────────────────────────────────────────────────────────────────────────────────────┐
+│                             main.py  (Entry Point)                                     │
+│                                                                                        │
+│  ┌─────────────────┐   ┌──────────────────┐   ┌───────────────────────────────────┐   │
+│  │   FaceModule     │   │    TTSModule     │   │          LLMModule                 │   │
+│  │   (pygame)       │   │   (edge-tts)     │   │  ┌─────────────────────────────┐  │   │
+│  │                  │   │                  │   │  │  SessionManager (SQLite)   │  │   │
+│  │  IDLE/ LISTENING │   │  speak(text)     │   │  │  - create_session()        │  │   │
+│  │  THINKING/       │   │  speak_and_wait()│   │  │  - chat()                  │  │   │
+│  │  SPEAKING/       │   │  is_playing()    │   │  │  - summarise()             │  │   │
+│  │  CURIOUS         │   │  stop()          │   │  │                             │  │   │
+│  │                  │   │  set_callbacks() │   │  │  MemoryManager              │  │   │
+│  │  set_state() ◀───┼───│  on_start/finish │   │  │  (sliding window +           │  │   │
+│  │  run_main_thread │   └────────┬─────────┘   │  │   automatic summarization)  │  │   │
+│  └─────────────────┘            │              │  └─────────────────────────────┘  │   │
+│         ▲                       │              │  ┌─────────────────────────────┐  │   │
+│         │ callbacks             │ speak()      │  │  OpenRouterConn             │  │   │
+│         │ set_face_state        │              │  │  (REST API → any LLM)       │  │   │
+│         │                       │              │  └─────────────────────────────┘  │   │
+│         │                       │              └───────────┬───────────────────────┘   │
+│         │                       │                          │                            │
+│  ┌──────▼───────────────────────▼──────────────────────────▼────────────────────────┐  │
+│  │                              VoicePipeline                                         │  │
+│  │                                                                                    │  │
+│  │  ┌──────────┐   ┌──────────┐   ┌──────────────┐   ┌──────────┐   ┌────────────┐  │  │
+│  │  │   VAD    │──▶│   ASR    │──▶│   Filler     │──▶│   LLM    │──▶│    TTS     │  │  │
+│  │  │ (Silero) │   │ (Google  │   │   Phrase     │   │  chat()  │   │ speak_and_ │  │  │
+│  │  │          │   │  API)    │   │   (fire &    │   │          │   │ wait()     │  │  │
+│  │  │ mic ─────┤   │ audio▶   │   │    forget)   │   │ response │   │            │  │  │
+│  │  │ realtime │   │ → text   │   │              │   │          │   │            │  │  │
+│  │  └──────────┘   └────┬─────┘   └──────────────┘   └────┬─────┘   └──────┬─────┘  │  │
+│  │                       │                                 │                │         │  │
+│  │                       │     ┌────────────────────┐      │                │         │  │
+│  │                       │     │ MotorController    │      │                │         │  │
+│  │                       │     │ (pySerial → ESP32) │      │                │         │  │
+│  │                       │     └────────────────────┘      │                │         │  │
+│  │                       │         ▲ move commands          │                │         │  │
+│  │                       └─────────┴────────────────────────┘                │         │  │
+│  └───────────────────────────────────┬──────────────────────────────────────────┘         │
+│                                      │                                                    │
+│  ┌──────────────────────────────────▼──────────────────────────────────────────────────┐  │
+│  │                               VisionPipeline                                         │  │
+│  │  (activated by swipe gesture, controlled by set_vision_active flag)                   │  │
+│  │                                                                                      │  │
+│  │  ┌────────────┐                                                                      │  │
+│  │  │   Camera    │  ┌─────────────────────────────────────────────────────────────┐   │  │
+│  │  │  (cv2)     │──▶│                    Module Router                             │   │  │
+│  │  └────────────┘  │  ┌──────────────┐ ┌────────────┐ ┌────────────────────┐     │   │  │
+│  │                  │  │ FaceTracker  │ │  Gesture   │ │     Emotion        │     │   │  │
+│  │                  │  │ (OpenCV DNN) │ │ (MediaPipe) │ │   (CNN PyTorch)    │     │   │  │
+│  │                  │  └──────────────┘ └────────────┘ └────────────────────┘     │   │  │
+│  │                  │  ┌──────────────┐ ┌────────────┐ ┌────────────────────┐     │   │  │
+│  │                  │  │   Objects    │ │  Obstacle  │ │      Scene         │     │   │  │
+│  │                  │  │ (YOLOv8n)    │ │  Detect    │ │  (YOLOv8n-seg)     │     │   │  │
+│  │                  │  └──────────────┘ └────────────┘ └────────────────────┘     │   │  │
+│  │                  └────────────────────────┬────────────────────────────────────┘   │  │
+│  │                                           │                                        │  │
+│  │                                   shared_context                                    │  │
+│  └───────────────────────────────────────────┼────────────────────────────────────────┘  │
+│                                              │                                           │
+│                                              ▼                                           │
+│                                  ┌────────────────────────┐                              │
+│                                  │  LLM receives vision    │                              │
+│                                  │  context in [VISION]    │                              │
+│                                  │  system prompt block    │                              │
+│                                  └────────────────────────┘                              │
+│                                                                                          │
+│  ┌──────────────────────────────────────────────────────────────────────────────────┐   │
+│  │                         Settings Panel (Swipe UI)                                 │   │
+│  │  Swipe left → Panel opens → Tap rows to toggle:                                   │   │
+│  │    vision_mode (voice-only / default / vision)                                    │   │
+│  │    log_level, language, mic_mute, ...                                             │   │
+│  └──────────────────────────────────────────────────────────────────────────────────┘   │
+│                                                                                          │
+│  ┌──────────────────────────────────────────────────────────────────────────────────┐   │
+│  │                      Diagnostics & Watchdog (config/diagnostics.py)                │   │
+│  │  - Startup diagnostics (mic, speaker, camera, models, disk, RAM, internet)        │   │
+│  │  - Watchdog thread (component health pings, stale-component callbacks)             │   │
+│  │  - Periodic garbage collection                                                     │   │
+│  │  - SystemMonitor (FPS history, CPU temperature overlay)                            │   │
+│  └──────────────────────────────────────────────────────────────────────────────────┘   │
+└──────────────────────────────────────────────────────────────────────────────────────────┘
+</div>
+
+<h3>Data Flow (Single Voice Interaction Cycle)</h3>
+
+<div class="seq-diagram">
+User speaks ──▶ VAD detects speech ──▶ ASR transcribes ──▶ Filler phrase plays (TTS)
+                                                               │
+                                                               ▼
+Face: THINKING ◀────────────────── LLM processes (with vision context if available)
+                                                               │
+                                                               ▼
+Face: SPEAKING ◀─────────────────── TTS speaks LLM response
+                                                               │
+                                                               ▼
+                                                         Face: IDLE
+</div>
+
+<!-- ============== 3. FILES OVERVIEW TABLE ============== -->
+<h2>3. Files Overview Table</h2>
+
+<table>
+<thead>
+<tr><th>File</th><th>Lines</th><th>Role</th><th>Key Responsibilities</th></tr>
+</thead>
+<tbody>
+<tr><td><code>main.py</code></td><td>141</td><td>Entry point</td><td>Module initialization, dependency injection, main loop, graceful shutdown</td></tr>
+<tr><td><code>health_check.py</code></td><td>404</td><td>Diagnostics</td><td>ANSI-coloured standalone health check with live module tests and readiness scoring</td></tr>
+<tr><td><code>test_vision_debug.py</code></td><td>218</td><td>Vision debug tool</td><td>Captures 50 frames through all vision modules; saves annotated images; per-module timing</td></tr>
+<tr><td><code>robot_shutdown_client.py</code></td><td>72</td><td>RPi shutdown poller</td><td>Polls a REST API every 15 s; executes <code>sudo shutdown -h now</code> on signal</td></tr>
+<tr><td><code>requirements.txt</code></td><td>24</td><td>Dependencies</td><td>Pinned Python packages for core, voice, vision, face, and shutdown API modules</td></tr>
+<tr><td><code>.env.example</code></td><td>89</td><td>Config template</td><td>Bilingual (Arabic/English) environment variable documentation with defaults</td></tr>
+<tr><td><code>setup.sh</code></td><td>204</td><td>Linux/RPi setup</td><td>Automates venv creation, system packages, model downloads, Pi optimizations, health check</td></tr>
+<tr><td><code>setup.ps1</code></td><td>167</td><td>Windows setup</td><td>PowerShell equivalent: venv, pip install, directory creation, .env copy, model downloads</td></tr>
+<tr><td><code>ropo-shutdown.service</code></td><td>15</td><td>systemd unit</td><td>Runs robot_shutdown_client.py as a system service with auto-restart</td></tr>
+<tr><td><code>README.md</code></td><td>373</td><td>Project documentation</td><td>Feature list, architecture diagram, setup instructions, roadmap, team contribution guide</td></tr>
+</tbody>
+</table>
+
+<!-- ============== 4. DETAILED FILE EXPLANATIONS ============== -->
+<h2>4. Detailed File Explanations</h2>
+
+<h3>4.1 <code>main.py</code> — Entry Point &amp; System Orchestrator</h3>
+
+<p><code>main.py</code> is the single entry point for the entire robot system. Its startup sequence is divided into six clear phases:</p>
+
+<ol>
+  <li><strong>Environment &amp; Logging Setup</strong> — Loads <code>.env</code> via <code>python-dotenv</code>, detects the platform preset (desktop/RPi4/RPi5), then calls <code>setup_logging()</code> which creates a <code>RotatingFileHandler</code> (5 MB max, 3 backups) to <code>data/robot.log</code> plus a custom <code>AsciiHandler</code> that replaces non-ASCII characters with <code>?</code> for safe console output. Also sets <code>ultralytics</code> logger to WARNING to reduce noise.</li>
+  <li><strong>Platform Configuration</strong> — On RPi, calls <code>configure_platform()</code> which limits OpenCV and PyTorch to single-threaded mode for thermal efficiency.</li>
+  <li><strong>Startup Diagnostics</strong> — Runs <code>run_startup_diagnostics()</code> checking microphone, speaker, camera, model files, disk space, RAM, and internet connectivity. Results are printed to console.</li>
+  <li><strong>Module Initialization</strong> — Creates instances in dependency order:
+    <ul>
+      <li><code>FaceModule(fullscreen=False)</code> — Pygame face display; started immediately so the face is visible during boot</li>
+      <li><code>TTSModule(settings.tts)</code> — edge-tts audio playback engine</li>
+      <li><code>LLMModule()</code> — OpenRouter client + SQLite SessionManager</li>
+      <li><code>session_id</code> — A conversation session is created with <code>llm.create_session(student_name, language)</code></li>
+      <li><code>VisionPipeline()</code> — Camera + all vision modules; opened and started on its own thread</li>
+      <li><code>MotorController(port)</code> — Serial connection to ESP32; gracefully degrades if unavailable</li>
+      <li><code>VoicePipeline(...)</code> — Receives all modules via dependency injection, plus a <code>set_face_state</code> callback and <code>vision_context_getter</code> for cross-pipeline data sharing</li>
+    </ul>
+  </li>
+  <li><strong>Main Loop</strong> — Calls <code>face.run_main_thread()</code> which enters the Pygame event loop and blocks. All other modules run on their own threads.</li>
+  <li><strong>Shutdown Sequence</strong> — In the <code>finally</code> block: stops the voice pipeline (joins stream + worker threads), stops and closes the vision pipeline, closes the motor serial port, closes the LLM database, and stops the face display.</li>
+</ol>
+
+<h4>Cross-platform Port Detection</h4>
+<p>Motor port is selected at runtime:</p>
+<pre><code>if sys.platform == "win32":
+    motor_port = "COM3"
+else:
+    motor_port = "/dev/ttyS0"</code></pre>
+
+<h3>4.2 <code>health_check.py</code> — Enhanced Standalone Diagnostics</h3>
+
+<p>A 404-line diagnostic script that can be run independently before the main system. It produces both ANSI-coloured terminal output and a structured <code>health_report.txt</code> file. The diagnostic categories are:</p>
+
+<table>
+<thead><tr><th>Category</th><th>Checks Performed</th><th>Methodology</th></tr></thead>
+<tbody>
+  <tr><td>Platform Info</td><td>OS, Python version, CPU cores, RAM, RPi detection, working directory</td><td><code>platform.system()</code>, <code>psutil</code>, <code>/proc/device-tree/model</code></td></tr>
+  <tr><td>Package Versions</td><td>numpy, requests, dotenv, speechrecognition, sounddevice, torch, edge-tts, cv2, ultralytics, torchvision, pygame</td><td><code>importlib.metadata.version()</code></td></tr>
+  <tr><td>Model Files</td><td>deploy.prototxt, res10_300x300_ssd, yolov8s.pt, yolov8s-seg.pt, emotion_cnn_pytorch.pt</td><td>File existence + size check</td></tr>
+  <tr><td>VAD Settings</td><td>ROBOT_VAD_THRESHOLD, SILENCE_TIMEOUT, MIN_SPEECH, PRE_ROLL</td><td><code>os.getenv()</code> vs defaults</td></tr>
+  <tr><td>Network</td><td>OpenRouter API (api.openrouter.ai:443), Google ASR (www.google.com:443)</td><td><code>socket.connect()</code> with 5 s timeout</td></tr>
+  <tr><td>Module Imports</td><td>All 17 internal modules across voice, vision, llm, and config packages</td><td><code>importlib.import_module()</code> with exception capture</td></tr>
+  <tr><td>Live Module Tests</td><td>VAD inference, TTS generation, LLM API call, Camera capture</td><td>Actual function calls with timing; LLM test requires API key</td></tr>
+  <tr><td>Integration Tests</td><td>FaceModule, TTSModule, LLMModule, VisionPipeline, VoicePipeline instantiation</td><td>Constructor calls with minimal arguments</td></tr>
+</tbody>
+</table>
+
+<h4>Readiness Scoring</h4>
+<p>After all checks, the system computes a score: <code>passed / total * 100</code>. Thresholds: ≥90 % → READY, ≥70 % → MOSTLY READY, otherwise → NOT READY. The score is printed in green/yellow/red ANSI and saved to the report.</p>
+
+<h3>4.3 <code>test_vision_debug.py</code> — Standalone Vision Debug Tool</h3>
+
+<p>This tool exercises every vision module in isolation from the main system. It captures 50 frames from the camera and runs each module on every frame, logging per-module timing. Annotated frames are saved every 10 frames to <code>vision_debug_output/</code>.</p>
+
+<p><strong>Debug workflow:</strong></p>
+<ol>
+  <li>Opens camera via <code>CameraManager</code></li>
+  <li>Initializes all modules: FaceIdentityTracker, GestureDetector, EmotionDetector, ObjectRecognitionModule, SceneSegmentationModule, ObstacleDetector</li>
+  <li>For each frame: runs all modules sequentially, records timing, draws bounding boxes and labels</li>
+  <li>Logs per-frame summary: faces count, objects count, gesture status, and six timing values</li>
+  <li>Saves annotated JPGs with overlay info (frame number, face/gesture/emotion/objects, milliseconds)</li>
+  <li>Prints final summary with detection counts and warnings if no faces or objects were found</li>
+</ol>
+
+<h3>4.4 <code>robot_shutdown_client.py</code> — Raspberry Pi Shutdown Poller</h3>
+
+<p>A lightweight, resilient polling client designed to run as a systemd service on the Raspberry Pi. It enables remote shutdown from a mobile app or web backend.</p>
+
+<p><strong>Polling architecture:</strong></p>
+<ul>
+  <li>Reads <code>SHUTDOWN_API_URL</code> and <code>SHUTDOWN_TOKEN</code> from environment variables</li>
+  <li>Uses a single <code>requests.Session()</code> with a 10-second timeout</li>
+  <li>Polls <code>GET /shutdown-status</code> every 15 seconds (configurable via <code>SHUTDOWN_POLL_INTERVAL</code>)</li>
+  <li>When the JSON response contains <code>"shutdown": true</code>:
+    <ol>
+      <li>Sends <code>POST /shutdown-reset</code> with the token to acknowledge and reset the flag</li>
+      <li>Executes <code>sudo shutdown -h now</code> via subprocess</li>
+    </ol>
+  </li>
+  <li>Never crashes: all exceptions are caught and logged, and the loop continues indefinitely</li>
+  <li>Individual <code>except</code> clauses for <code>Timeout</code>, <code>ConnectionError</code>, generic <code>RequestException</code>, and any unexpected error</li>
+</ul>
+
+<h3>4.5 Configuration Files</h3>
+
+<h4><code>.env.example</code></h4>
+<p>All 35+ environment variables are documented bilingually (Arabic + English) with sensible defaults. Categories: LLM settings (API key, model, timeouts), general (log level, student name, language), VAD (threshold, silence timeout, chunk size, model repo), ASR (provider, sample rate, language mode), camera (resolution, FPS, face detection parameters), vision (profile, overlay, adaptive shedding), TTS (engine, poll interval), gesture (buffer, stability, confidence), and remote shutdown (API URL, token).</p>
+
+<h4><code>requirements.txt</code></h4>
+<p>Twenty-four lines organized into six logical groups: Core (numpy, pyserial, requests, dotenv), Shutdown API (fastapi, uvicorn — deployed separately on Railway), Voice Pipeline (rapidfuzz, speechrecognition, sounddevice, torch, edge-tts), Vision Pipeline (opencv-python, ultralytics, torchvision), and Face Display (pygame).</p>
+
+<h3>4.6 Deployment Scripts</h3>
+
+<h4><code>setup.sh</code> (Linux / Raspberry Pi)</h4>
+<p>An idempotent 204-line bash script that: checks Python ≥3.10, installs system packages (portaudio, SDL2, OpenBLAS, OpenCV, ffmpeg, libcamera), creates a Python venv and installs requirements, creates project directories with <code>.gitkeep</code>, copies <code>.env.example</code> to <code>.env</code> if missing, downloads OpenCV face detection models from GitHub, applies Pi-specific optimizations (camera interface, gpu_mem=128, picamera2), and runs the health check as a final validation.</p>
+
+<h4><code>setup.ps1</code> (Windows)</h4>
+<p>A 167-line PowerShell 5.1+ equivalent. It performs the same steps as <code>setup.sh</code> but uses <code>Test-Path</code>, <code>Copy-Item</code>, <code>Invoke-WebRequest</code>, and PowerShell colour functions. Does not include Pi-specific optimizations.</p>
+
+<h4><code>ropo-shutdown.service</code></h4>
+<p>A systemd unit file that runs <code>robot_shutdown_client.py</code> as a service. Configured with <code>Restart=always</code> (5-second delay), <code>EnvironmentFile=/etc/ropo-shutdown.env</code>, and <code>Wants=network-online.target</code> to ensure network availability before starting.</p>
+
+<!-- ============== 5. CODE WALKTHROUGH ============== -->
+<div class="page-break"></div>
+<h2>5. Code Walkthrough</h2>
+
+<p>The following screenshots illustrate the key sections of the codebase. Each placeholder represents a figure that should be captured from the actual source files.</p>
+
+<div class="screenshot">
+  <strong>Figure 5.1</strong> — <code>main.py</code> startup sequence: environment loading, preset detection, and call to <code>setup_logging()</code>. Lines 1–23 show the imports and global settings initialization.
+</div>
+
+<div class="screenshot">
+  <strong>Figure 5.2</strong> — <code>setup_logging()</code> (lines 25–57): <code>RotatingFileHandler</code> creation with 5 MB max size and 3 backups; custom <code>AsciiHandler</code> class that encodes → replaces non-ASCII → decodes for safe console output; dual-handler logger configuration.
+</div>
+
+<div class="screenshot">
+  <strong>Figure 5.3</strong> — <code>main()</code> module initialization block (lines 75–101): FaceModule, TTSModule, LLMModule, session creation, VisionPipeline, MotorController with platform-specific port detection, and the <code>set_face_state</code> callback closure.
+</div>
+
+<div class="screenshot">
+  <strong>Figure 5.4</strong> — VoicePipeline instantiation with dependency injection (lines 108–115): all five dependencies (llm, tts_module, session_id, face_set_state, motor_controller, vision_context_getter) passed explicitly, demonstrating the dependency-injection pattern.
+</div>
+
+<div class="screenshot">
+  <strong>Figure 5.5</strong> — Cleanup and shutdown sequence (lines 123–141): the <code>try/except/finally</code> block showing the ordered teardown of all six modules with logging at each step.
+</div>
+
+<div class="screenshot">
+  <strong>Figure 5.6</strong> — <code>health_check.py</code> diagnostics loop pattern (lines 41–44, 205–250): the <code>check()</code> helper that appends results and the live VAD inference test that loads Silero, runs inference on a zero array, and validates the output.
+</div>
+
+<div class="screenshot">
+  <strong>Figure 5.7</strong> — <code>test_vision_debug.py</code> multi-module testing (lines 93–212): the main capture loop that runs six vision modules per frame, logs per-module timing, and conditionally saves annotated images with bounding boxes and overlay information.
+</div>
+
+<div class="screenshot">
+  <strong>Figure 5.8</strong> — <code>VoicePipeline.run_forever()</code> VAD callback (lines 337–387): the <code>sounddevice.InputStream</code> callback demonstrating the state-machine logic for speech detection, buffering, pre-roll, silence timeout, and segment enqueuing.
+</div>
+
+<div class="screenshot">
+  <strong>Figure 5.9</strong> — <code>robot_shutdown_client.py</code> polling loop (lines 31–68): the complete <code>poll_forever()</code> function showing the GET-then-POST pattern, error-resilient design with six separate exception handlers, and subprocess-based shutdown execution.
+</div>
+
+<div class="screenshot">
+  <strong>Figure 5.10</strong> — <code>config/settings.py</code> data model (lines 18–197): the frozen dataclass hierarchy with <code>get_settings()</code> factory function, <code>PlatformPreset</code> enum, <code>detect_preset()</code> platform detection, <code>configure_platform()</code> RPi optimizations, and <code>profile_module_config()</code> for vision profile mapping.
+</div>
+
+<!-- ============== 6. SEQUENCE FLOW ============== -->
+<h2>6. Sequence Flow</h2>
+
+<p>The following sequence diagram illustrates the complete lifecycle from system startup through idle operation, a voice interaction, and shutdown.</p>
+
+<div class="seq-diagram">
+SYSTEM STARTUP
+==============
+main.py
+  │
+  ├─ load_dotenv()                     # .env → os.environ
+  ├─ detect_preset()                   # DESKTOP_DEBUG / RPi4 / RPi5
+  ├─ setup_logging()                   # RotatingFileHandler + AsciiHandler
+  ├─ configure_platform()              # (RPi) cv2/torch single-thread
+  ├─ run_startup_diagnostics()         # mic, speaker, camera, models, ...
+  │
+  ├─ FaceModule() ──.start()           # pygame window opens (IDLE state)
+  ├─ TTSModule(settings.tts)           # edge-tts engine
+  ├─ LLMModule()                       # OpenRouter + SQLite
+  │   └─ create_session(student, lang) # → session_id
+  ├─ VisionPipeline() ──.open() ──.start()  # camera + vision thread
+  ├─ MotorController(port)             # serial to ESP32
+  ├─ VoicePipeline(llm, tts, face_cb, motor, vision_ctx)
+  │   └─ .start()                      # spawns stream + worker threads
+  │
+  └─ face.run_main_thread()            # [BLOCKING] pygame event loop
+
+
+IDLE STATE
+==========
+Face: IDLE
+VoicePipeline: stream thread listening on mic
+VisionPipeline: frames processed per profile config (minimal/balanced/full)
+Watchdog: pinging components every 30 s
+SystemMonitor: tracking FPS / temperature
+
+
+VOICE INTERACTION
+=================
+1. User speaks
+2. VAD callback detects speech (is_speech() == True)
+     ├─ Interrupts current TTS if playing
+     ├─ Sets FaceState LISTENING
+     ├─ Begins accumulating audio chunks
+     └─ Pre-roll buffer prepended
+3. Silence timeout reached (≥1.2 s no speech)
+     └─ Segment enqueued to worker thread
+4. Worker:
+     a. ASR transcribes (Google API) → text + language
+     b. Wake-word check (fuzzy match)
+     c. If wake word: speak greeting, return
+     d. Move-command check (fuzzy match against MOVE_COMMANDS)
+          → MotorController.{forward,backward,turn_left,turn_right,stop}()
+     e. Face: THINKING
+     f. Filler phrase plays via TTS (fire-and-forget)
+     g. LLM.chat(session_id, text, vision_context)
+          ├─ If vision data available: prepend [VISION] context block
+          └─ If OpenRouter unreachable: offline fallback message
+     h. Face: SPEAKING
+     i. TTS.speak_and_wait(response, language)
+     j. Face: IDLE
+5. Return to idle
+
+
+SHUTDOWN
+========
+KeyboardInterrupt or Exception
+  │
+  └─ finally:
+       ├─ voice_pipeline.stop()        # set _running=False, join threads
+       ├─ vision_pipeline.stop()
+       ├─ vision_pipeline.close()
+       ├─ motor.close()                # close serial port
+       ├─ llm.close()                  # close SQLite connection
+       └─ face.stop()                  # close pygame
+</div>
+
+<!-- ============== 7. FOLDER INTEGRATION ============== -->
+<h2>7. Folder Integration</h2>
+
+<p>All six subdirectories are connected exclusively through <code>main.py</code>. No module imports another module from a different vertical subsystem — cross-vertical communication happens via the <code>VoicePipeline</code> constructor parameters (dependency injection) and the shared-context dictionary pattern. The following table maps each folder to its role in the <code>main.py</code> initialization sequence.</p>
+
+<table>
+<thead>
+  <tr><th>Folder</th><th>Key Files</th><th>Initialized in <code>main.py</code> at Line</th><th>Integration Point</th></tr>
+</thead>
+<tbody>
+  <tr>
+    <td><code>config/</code></td>
+    <td><code>settings.py</code>, <code>diagnostics.py</code></td>
+    <td>1–23, 66–73</td>
+    <td><code>get_settings()</code> provides all configuration dataclasses; <code>run_startup_diagnostics()</code> validates the environment before any module is created</td>
+  </tr>
+  <tr>
+    <td><code>voice/</code></td>
+    <td><code>pipeline.py</code>, <code>vad.py</code>, <code>asr.py</code>, <code>tts.py</code>, <code>face.py</code></td>
+    <td>75–76, 81, 108–115, 120</td>
+    <td><code>FaceModule</code> and <code>TTSModule</code> are independent; <code>VoicePipeline</code> orchestrates VAD→ASR→LLM→TTS and receives all cross-module references via constructor</td>
+  </tr>
+  <tr>
+    <td><code>vision/</code></td>
+    <td><code>pipeline.py</code>, <code>camera.py</code>, <code>modules/</code></td>
+    <td>90, 117–118</td>
+    <td><code>VisionPipeline</code> is a standalone thread; <code>get_shared_context()</code> is passed to <code>VoicePipeline</code> as a callable for on-demand vision data injection into LLM prompts</td>
+  </tr>
+  <tr>
+    <td><code>llm/</code></td>
+    <td><code>module.py</code></td>
+    <td>82–88, 109</td>
+    <td><code>LLMModule</code> owns session lifecycle; <code>create_session()</code> is called before <code>VoicePipeline</code> is created; the instance is injected into <code>VoicePipeline</code></td>
+  </tr>
+  <tr>
+    <td><code>hardware/</code></td>
+    <td><code>motor_controller.py</code></td>
+    <td>92–100, 113</td>
+    <td><code>MotorController</code> is conditionally available (graceful degradation); injected into <code>VoicePipeline</code>; motor commands are triggered by keyword matching in the pipeline worker</td>
+  </tr>
+  <tr>
+    <td><code>shutdown/</code></td>
+    <td><code>main.py</code> (separate FastAPI server)</td>
+    <td>N/A (separate process)</td>
+    <td>Deployed independently on Railway; <code>robot_shutdown_client.py</code> (root) polls its API. No direct import from main system.</td>
+  </tr>
+</tbody>
+</table>
+
+<!-- ============== 8. TECHNICAL NOTES ============== -->
+<h2>8. Technical Notes</h2>
+
+<h3>Overall Tech Stack</h3>
+<table>
+<thead><tr><th>Layer</th><th>Technology</th><th>Purpose</th></tr></thead>
+<tbody>
+  <tr><td>Language</td><td>Python 3.10+</td><td>All system code</td></tr>
+  <tr><td>Configuration</td><td><code>python-dotenv</code> + frozen dataclasses</td><td>Environment-aware typed settings</td></tr>
+  <tr><td>Voice VAD</td><td>Silero VAD (PyTorch)</td><td>Real-time voice activity detection at 16 kHz</td></tr>
+  <tr><td>Voice ASR</td><td>Google Speech Recognition API</td><td>Bilingual (Arabic/English) transcription</td></tr>
+  <tr><td>LLM</td><td>OpenRouter API (any model)</td><td>Conversational AI with system prompts</td></tr>
+  <tr><td>Voice TTS</td><td>edge-tts (Microsoft Edge)</td><td>Natural-sounding bilingual speech synthesis</td></tr>
+  <tr><td>Face Display</td><td>Pygame 2.5+</td><td>Animated robot face with state transitions</td></tr>
+  <tr><td>Vision Camera</td><td>OpenCV (cv2.VideoCapture)</td><td>Camera capture at configurable resolution/FPS</td></tr>
+  <tr><td>Vision Face</td><td>OpenCV DNN (Caffe SSD)</td><td>Face detection + identity tracking</td></tr>
+  <tr><td>Vision Gesture</td><td>MediaPipe Hands</td><td>Hand landmark detection → gesture classification</td></tr>
+  <tr><td>Vision Emotion</td><td>Custom CNN (PyTorch)</td><td>7-class facial emotion classification</td></tr>
+  <tr><td>Vision Objects</td><td>Ultralytics YOLOv8n</td><td>80-class object detection</td></tr>
+  <tr><td>Vision Scene</td><td>Ultralytics YOLOv8n-seg</td><td>Instance segmentation for scene understanding</td></tr>
+  <tr><td>Motor</td><td>pySerial → ESP32</td><td>Serial protocol (F/B/L/R/SPD commands)</td></tr>
+  <tr><td>Database</td><td>SQLite (via Python sqlite3)</td><td>Conversation history per session</td></tr>
+  <tr><td>Audio I/O</td><td>sounddevice (PortAudio)</td><td>Low-latency microphone streaming</td></tr>
+  <tr><td>Fuzzy Matching</td><td>rapidfuzz</td><td>Wake word and command detection</td></tr>
+</tbody>
+</table>
+
+<h3>Design Patterns</h3>
+
+<table>
+<thead><tr><th>Pattern</th><th>Location</th><th>Description</th></tr></thead>
+<tbody>
+  <tr>
+    <td><strong>Dependency Injection</strong></td>
+    <td><code>main.py:108-115</code></td>
+    <td><code>VoicePipeline</code> receives all its dependencies (llm, tts, face callback, motor, vision getter) through its constructor rather than importing them directly. This makes the pipeline testable and decoupled.</td>
+  </tr>
+  <tr>
+    <td><strong>Observer (via Callbacks)</strong></td>
+    <td><code>voice/pipeline.py:136-140</code>, <code>voice/face.py</code></td>
+    <td>The voice pipeline registers <code>on_start</code>/<code>on_finish</code> callbacks on <code>TTSModule</code> to update the face state. The <code>set_face_state</code> function is passed as a closure from <code>main.py</code>.</td>
+  </tr>
+  <tr>
+    <td><strong>Pipeline Architecture</strong></td>
+    <td><code>voice/pipeline.py</code>, <code>vision/pipeline.py</code></td>
+    <td>Voice: VAD → ASR → Filler → LLM → TTS (sequential stages connected by a thread-safe queue). Vision: Camera → Module Router → per-module processors (parallelizable, with adaptive frame skipping).</td>
+  </tr>
+  <tr>
+    <td><strong>Strategy (via Profiles)</strong></td>
+    <td><code>config/settings.py:208-232</code></td>
+    <td><code>profile_module_config()</code> returns a dictionary of enabled/disabled flags for each vision module based on the selected <code>VisionProfile</code> enum (MINIMAL/BALANCED/FULL).</td>
+  </tr>
+  <tr>
+    <td><strong>Factory Method</strong></td>
+    <td><code>config/settings.py:186-197</code></td>
+    <td><code>get_settings()</code> constructs and returns a complete <code>Settings</code> dataclass tree with values from environment variables, acting as a configuration factory.</td>
+  </tr>
+  <tr>
+    <td><strong>Graceful Degradation</strong></td>
+    <td><code>main.py:97-100</code>, <code>voice/pipeline.py:285-287</code></td>
+    <td>Motor controller logs a warning and continues without motors if serial is unavailable. LLM prints a friendly offline fallback message if OpenRouter is unreachable.</td>
+  </tr>
+  <tr>
+    <td><strong>Thread-Safe Queue</strong></td>
+    <td><code>voice/pipeline.py:151, 180-191</code></td>
+    <td>Audio segments flow from the stream thread (callback) to the worker thread via a <code>queue.Queue(maxsize=3)</code>. Dropped-segment counter provides back-pressure visibility.</td>
+  </tr>
+</tbody>
+</table>
+
+<h3>Threading Model</h3>
+
+<table>
+<thead><tr><th>Thread</th><th>Spawned At</th><th>Function</th><th>Blocking?</th></tr></thead>
+<tbody>
+  <tr><td>Main thread</td><td><code>main.py:124</code></td><td><code>face.run_main_thread()</code> — Pygame event loop</td><td>Yes (blocks indefinitely)</td></tr>
+  <tr><td>Voice stream</td><td><code>voice/pipeline.py:415</code></td><td><code>run_forever()</code> — audio capture callback</td><td>No (inner sleep loop)</td></tr>
+  <tr><td>Voice worker</td><td><code>voice/pipeline.py:413</code></td><td><code>_worker_loop()</code> — segment processing</td><td>No (blocking get with timeout)</td></tr>
+  <tr><td>Vision pipeline</td><td><code>vision/pipeline.py</code></td><td>Camera read + module routing</td><td>No (frame-loop with sleep)</td></tr>
+  <tr><td>Watchdog</td><td><code>config/diagnostics.py:154</code></td><td>Component health monitoring (daemon)</td><td>No (10 s check interval)</td></tr>
+</tbody>
+</table>
+
+<p>All threads are joined with a timeout (3 s for stream, 5 s for worker) during shutdown to prevent hanging.</p>
+
+<!-- ============== 9. ACADEMIC EXPLANATION ============== -->
+<div class="page-break"></div>
+<h2>9. Academic Explanation</h2>
+
+<h3>System Design Philosophy</h3>
+<p>Ropo was designed from first principles as a <strong>modular, event-driven robotic system</strong> where each cognitive capability (hearing, seeing, thinking, speaking, moving, expressing) is implemented as an independent module. This follows the <strong>Separation of Concerns</strong> principle: the voice pipeline does not know how vision works, the face module does not know what the LLM said — they communicate through well-defined interfaces (callbacks, context getters, and dependency injection).</p>
+
+<p>The architecture maps naturally to a <strong>sense–think–act</strong> robotic control loop:</p>
+<ul>
+  <li><strong>Sense</strong> — VAD (hearing) + Camera + Vision modules (seeing)</li>
+  <li><strong>Think</strong> — LLM with conversation history and vision context</li>
+  <li><strong>Act</strong> — TTS (speaking) + MotorController (moving) + FaceModule (expressing)</li>
+</ul>
+
+<h3>Modularity &amp; Dependency Injection</h3>
+<p>Every module in Ropo is a Python class that could — in principle — be removed, replaced, or tested in isolation. The key enabler is <strong>constructor-based dependency injection</strong>: <code>VoicePipeline</code> receives all its collaborators as parameters. This means:</p>
+<ul>
+  <li>A <code>MockLLM</code> can replace <code>LLMModule</code> for testing without changing a single line of pipeline code</li>
+  <li>The <code>MotorController</code> gracefully degrades when the ESP32 is not connected — the pipeline simply stops dispatching motor commands</li>
+  <li>Vision context is injected lazily via a getter function, so the voice pipeline does not depend on the vision pipeline's import or lifecycle</li>
+</ul>
+
+<h3>Bilingual Support</h3>
+<p>Arabic/English bilingualism is a first-class architectural concern, not a feature bolted on afterwards:</p>
+<ul>
+  <li><strong>ASR</strong> uses <code>language_mode="auto"</code> which lets Google's API detect the language per utterance</li>
+  <li><strong>LLM</strong> has separate system prompts for Arabic and English that match the detected language</li>
+  <li><strong>TTS</strong> selects the voice model based on the detected language (<code>ar-EG-ShakirNeural</code> for Arabic)</li>
+  <li><strong>Filler phrases</strong> are drawn from separate Arabic/English lists with culturally appropriate expressions</li>
+  <li><strong>Session language</strong> is set at session creation time and stored in the SQLite database</li>
+  <li><strong>Environment documentation</strong> in <code>.env.example</code> is written in both languages</li>
+</ul>
+
+<h3>Raspberry Pi Optimizations</h3>
+<p>The system is designed for resource-constrained deployment on Raspberry Pi hardware:</p>
+<ul>
+  <li><strong>Adaptive load shedding</strong> — Vision profiles (minimal/balanced/full) switch module sets at runtime; adaptive frame skipping drops frames when processing exceeds the target interval</li>
+  <li><strong>Platform-specific settings</strong> — Camera resolution defaults to 640×480@15 FPS on RPi vs 1280×720@30 FPS on desktop</li>
+  <li><strong>Thermal monitoring</strong> — CPU temperature is read from <code>/sys/class/thermal/thermal_zone0/temp</code>; the system can throttle vision processing at 75 °C</li>
+  <li><strong>Single-threaded Torch/OpenCV</strong> — <code>configure_platform()</code> calls <code>cv2.setNumThreads(1)</code> and <code>torch.set_num_threads(1)</code> to avoid thread contention on limited CPU cores</li>
+  <li><strong>Graceful degradation</strong> — Every component (motor, camera, LLM, microphone) has a runtime-availability check and continues gracefully if unavailable</li>
+</ul>
+
+<h3>Graduation Project Value</h3>
+<p>Ropo demonstrates competency across the full software engineering stack:</p>
+<ul>
+  <li><strong>System Architecture</strong> — Multi-threaded pipeline design with clear separation of concerns, dependency injection, and callback-based communication</li>
+  <li><strong>Computer Vision</strong> — Integration of four distinct vision techniques (DNN-based face detection, MediaPipe hands, YOLO object detection, CNN emotion classification) into a unified pipeline</li>
+  <li><strong>Natural Language Processing</strong> — Bilingual speech recognition, LLM-based conversation with context management, and natural TTS synthesis</li>
+  <li><strong>Embedded Systems</strong> — Serial communication with ESP32 for motor control, GPIO-aware systemd service for safe shutdown</li>
+  <li><strong>DevOps &amp; Tooling</strong> — Cross-platform setup scripts (bash + PowerShell), automated diagnostics with readiness scoring, logging with rotation, and environment-based configuration</li>
+  <li><strong>Software Quality</strong> — Comprehensive error handling (every exception is caught at the appropriate level), graceful degradation, thread-safe queue communication, and watchdog monitoring</li>
+</ul>
+
+<p>The project is <strong>fully functional on Windows desktop</strong> and <strong>deployment-ready for Raspberry Pi 5</strong>, making it a complete end-to-end system that bridges academic AI/ML knowledge with practical robotics engineering.</p>
+
+<hr>
+<p style="text-align:center; color:#888; font-size:0.85em;">
+  Ropo Educational Robot — System Documentation<br>
+  Generated from source code analysis. All code references are to the project root at the time of writing.
+</p>
+
+</body>
+</html>

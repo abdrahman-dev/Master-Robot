@@ -1,0 +1,938 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Voice Pipeline Documentation</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap');
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Inter', -apple-system, sans-serif; background: #0d1117; color: #e6edf3; line-height: 1.7; }
+  .container { max-width: 1100px; margin: 0 auto; padding: 0 24px; }
+  header { background: linear-gradient(135deg, #0d1117 0%, #161b22 100%); border-bottom: 1px solid #30363d; padding: 60px 0 40px; text-align: center; }
+  header h1 { font-size: 2.8rem; font-weight: 800; background: linear-gradient(135deg, #58a6ff, #3fb950); -webkit-background-clip: text; -webkit-text-fill-color: transparent; letter-spacing: -1px; }
+  header p { color: #8b949e; font-size: 1.1rem; margin-top: 8px; }
+  .badge { display: inline-block; background: #21262d; border: 1px solid #30363d; border-radius: 6px; padding: 2px 10px; font-size: 0.8rem; color: #8b949e; margin: 4px; }
+  nav { background: #161b22; border-bottom: 1px solid #30363d; position: sticky; top: 0; z-index: 100; }
+  nav ul { display: flex; list-style: none; overflow-x: auto; padding: 0 24px; gap: 4px; }
+  nav ul li a { display: block; padding: 12px 16px; color: #8b949e; text-decoration: none; font-size: 0.9rem; font-weight: 500; white-space: nowrap; border-bottom: 2px solid transparent; transition: all 0.2s; }
+  nav ul li a:hover { color: #58a6ff; border-bottom-color: #58a6ff; }
+  main { padding: 32px 0 80px; }
+  section { margin: 48px 0; }
+  h2 { font-size: 1.8rem; font-weight: 700; color: #f0f6fc; border-bottom: 1px solid #21262d; padding-bottom: 12px; margin-bottom: 24px; }
+  h3 { font-size: 1.3rem; font-weight: 600; color: #58a6ff; margin: 28px 0 12px; }
+  h4 { font-size: 1.05rem; font-weight: 600; color: #d2a8ff; margin: 20px 0 8px; }
+  p, li { color: #c9d1d9; margin-bottom: 12px; }
+  ul, ol { padding-left: 24px; margin-bottom: 16px; }
+  li { margin-bottom: 6px; }
+  code { font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; background: #21262d; padding: 2px 6px; border-radius: 4px; color: #f0f6fc; }
+  pre { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 16px 20px; overflow-x: auto; margin: 16px 0; position: relative; }
+  pre code { background: none; padding: 0; font-size: 0.8rem; line-height: 1.6; color: #e6edf3; }
+  .screenshot-placeholder { background: #161b22; border: 2px dashed #30363d; border-radius: 12px; padding: 40px 20px; text-align: center; margin: 20px 0; color: #484f58; font-weight: 600; font-size: 1rem; transition: all 0.2s; cursor: default; }
+  .screenshot-placeholder:hover { border-color: #58a6ff; color: #8b949e; }
+  .screenshot-placeholder::before { content: "📷 "; display: block; font-size: 2rem; margin-bottom: 8px; }
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 0.9rem; }
+  th, td { border: 1px solid #30363d; padding: 10px 14px; text-align: left; }
+  th { background: #21262d; font-weight: 600; color: #f0f6fc; }
+  td { color: #c9d1d9; }
+  tr:hover td { background: #1c2128; }
+  .callout { background: #1c2128; border-left: 4px solid #58a6ff; border-radius: 6px; padding: 16px 20px; margin: 16px 0; }
+  .callout.warning { border-left-color: #d29922; }
+  .callout.info { border-left-color: #3fb950; }
+  .arch-diagram { background: #161b22; border: 1px solid #30363d; border-radius: 12px; padding: 32px 24px; text-align: center; font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; margin: 20px 0; }
+  .arch-diagram .arrow { color: #484f58; }
+  .arch-diagram .block { display: inline-block; background: #1f2937; border: 1px solid #58a6ff; border-radius: 8px; padding: 8px 16px; margin: 4px; color: #58a6ff; font-weight: 600; }
+  .arch-diagram .block.green { border-color: #3fb950; color: #3fb950; }
+  .arch-diagram .block.purple { border-color: #d2a8ff; color: #d2a8ff; }
+  .arch-diagram .block.orange { border-color: #d29922; color: #d29922; }
+  .arch-diagram .block.red { border-color: #f85149; color: #f85149; }
+  .seq-diagram { font-family: 'JetBrains Mono', monospace; font-size: 0.8rem; background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 20px; overflow-x: auto; margin: 16px 0; line-height: 1.6; white-space: pre; }
+  .seq-diagram .actor { color: #58a6ff; }
+  .seq-diagram .msg { color: #c9d1d9; }
+  .seq-diagram .arrow { color: #484f58; }
+  .tag { display: inline-block; background: #1f2937; border-radius: 4px; padding: 1px 8px; font-size: 0.75rem; font-weight: 600; color: #8b949e; margin-right: 4px; }
+  .tag.py { color: #3572a5; border: 1px solid #3572a5; }
+  .tag.thread { color: #d29922; border: 1px solid #d29922; }
+  .tag.async { color: #3fb950; border: 1px solid #3fb950; }
+  @media print { body { background: #fff; color: #000; } header { border-bottom: 2px solid #000; } header h1 { -webkit-text-fill-color: #000; background: none; color: #000; } .container { max-width: 100%; } pre, .arch-diagram, .seq-diagram { background: #f6f8fa; border-color: #d0d7de; } table, th, td { border-color: #d0d7de; } th { background: #f6f8fa; } td, p, li { color: #000; } h3 { color: #0969da; } h4 { color: #8250df; } code { background: #f6f8fa; } .callout { background: #f6f8fa; } .screenshot-placeholder { border-color: #d0d7de; color: #8b949e; } nav { display: none; } section { page-break-inside: avoid; } }
+  @media (max-width: 768px) { header h1 { font-size: 1.8rem; } nav ul li a { padding: 10px 12px; font-size: 0.8rem; } }
+  .back-to-top { position: fixed; bottom: 24px; right: 24px; background: #21262d; border: 1px solid #30363d; border-radius: 8px; padding: 8px 14px; color: #58a6ff; text-decoration: none; font-size: 0.85rem; font-weight: 600; display: none; }
+  .back-to-top:hover { background: #30363d; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="container">
+    <h1>Voice Pipeline Documentation</h1>
+    <p>Complete voice interaction system — VAD → ASR → LLM → TTS + Animated Face</p>
+    <div style="margin-top: 12px;">
+      <span class="badge">Python 3.10+</span>
+      <span class="badge">PyTorch / Silero VAD</span>
+      <span class="badge">Google Speech Recognition</span>
+      <span class="badge">edge-tts</span>
+      <span class="badge">Pygame</span>
+      <span class="badge">sounddevice</span>
+    </div>
+  </div>
+</header>
+
+<nav>
+  <ul>
+    <li><a href="#overview">Overview</a></li>
+    <li><a href="#architecture">Architecture</a></li>
+    <li><a href="#files">Files</a></li>
+    <li><a href="#vad">VAD</a></li>
+    <li><a href="#asr">ASR</a></li>
+    <li><a href="#tts">TTS</a></li>
+    <li><a href="#face">Face</a></li>
+    <li><a href="#pipeline">Pipeline</a></li>
+    <li><a href="#walkthrough">Walkthrough</a></li>
+    <li><a href="#sequence">Sequence Flow</a></li>
+    <li><a href="#integration">Integration</a></li>
+    <li><a href="#notes">Technical Notes</a></li>
+    <li><a href="#academic">Academic Explanation</a></li>
+  </ul>
+</nav>
+
+<main class="container">
+
+<!-- ==================== 1. OVERVIEW ==================== -->
+<section id="overview">
+  <h2>1. Folder Purpose</h2>
+  <p>The <code>voice/</code> package implements a complete spoken dialogue pipeline for the Rope robot platform. It enables bidirectional natural-language interaction by chaining five discrete stages:</p>
+  <ol>
+    <li><strong>Voice Activity Detection (VAD)</strong> — Silero VAD determines when human speech is present in the microphone stream.</li>
+    <li><strong>Automatic Speech Recognition (ASR)</strong> — Google Speech Recognition transcribes audio segments into text.</li>
+    <li><strong>Wake Word &amp; Command Processing</strong> — Detects wake words (Arabic/English) and maps known movement commands to motor actions.</li>
+    <li><strong>Large Language Model (LLM) Integration</strong> — Sends transcribed text to an LLM for response generation.</li>
+    <li><strong>Text-to-Speech (TTS)</strong> — edge-tts synthesises the LLM response and plays it through the speaker.</li>
+  </ol>
+  <p>A <strong>FaceModule</strong> (pygame-based animated face) synchronises its emotional state with the pipeline phase — listening, thinking, speaking, idle, happy, curious, or sleeping — providing real-time visual feedback.</p>
+</section>
+
+<!-- ==================== 2. ARCHITECTURE ==================== -->
+<section id="architecture">
+  <h2>2. Architecture Overview</h2>
+
+  <div class="arch-diagram">
+    <div class="block red">Microphone</div>
+    <span class="arrow"> → </span>
+    <div class="block">VAD (Silero)</div>
+    <span class="arrow"> → </span>
+    <div class="block orange">Segment Queue</div>
+    <br>
+    <div class="block orange">Segment Queue</div>
+    <span class="arrow"> → </span>
+    <div class="block">ASR (Google)</div>
+    <span class="arrow"> → </span>
+    <div class="block purple">Wake Word</div>
+    <span class="arrow"> → </span>
+    <div class="block green">LLM</div>
+    <br>
+    <div class="block green">LLM</div>
+    <span class="arrow"> → </span>
+    <div class="block">TTS (edge-tts)</div>
+    <span class="arrow"> → </span>
+    <div class="block red">Speaker</div>
+    <br><br>
+    <div style="color: #8b949e; font-size: 0.75rem; margin-top: 8px;">
+      ── state sync ──&gt; <span class="block" style="padding: 4px 12px; font-size: 0.75rem;">FaceModule</span>
+    </div>
+  </div>
+
+  <h3>Pipeline Stages</h3>
+  <table>
+    <tr><th>Stage</th><th>Module</th><th>Function</th><th>Output</th></tr>
+    <tr><td>1. Audio Capture</td><td><code>pipeline.py</code></td><td>sounddevice <code>InputStream</code> reads raw PCM from the default microphone.</td><td>NumPy array (float32)</td></tr>
+    <tr><td>2. VAD</td><td><code>vad.py</code></td><td>Silero VAD inference on 512-sample frames; speech probability vs configurable threshold; segment boundary detection.</td><td>Speech segment (buffer of consecutive speech frames)</td></tr>
+    <tr><td>3. Segmentation</td><td><code>pipeline.py</code></td><td>Silence-based segmentation: accumulates speech frames, flushes on 1.0s+ silence. Enqueues segment for processing.</td><td>Segment object (audio + metadata)</td></tr>
+    <tr><td>4. ASR</td><td><code>asr.py</code></td><td>Google Speech Recognition via <code>speech_recognition</code> library; auto-detects Arabic then English fallback.</td><td>Transcribed text (string)</td></tr>
+    <tr><td>5. Wake Word</td><td><code>pipeline.py</code></td><td>Fuzzy matching against known wake words ("يا روبو", "ropo", "hey robo", etc.). Strips wake word prefix.</td><td>Clean query text</td></tr>
+    <tr><td>6. Motor Command</td><td><code>pipeline.py</code></td><td>Regex matching against <code>MOVE_COMMANDS</code> dictionary ("تحرك", "go forward", etc.).</td><td>Motor instruction (or None)</td></tr>
+    <tr><td>7. LLM</td><td><code>pipeline.py</code></td><td>Calls external <code>LLMModule</code> with conversation context; supports interrupt mid-generation.</td><td>Response text</td></tr>
+    <tr><td>8. TTS</td><td><code>tts.py</code></td><td>edge-tts async generation → temp file → pygame mixer playback. Fires callbacks for face sync.</td><td>Audible speech</td></tr>
+  </table>
+
+  <h3>Threading Model</h3>
+  <p>The pipeline employs a <strong>producer–consumer</strong> pattern with three threads:</p>
+  <ul>
+    <li><strong>Main Thread</strong> — Calls <code>run_forever()</code>, owns the <code>sounddevice.InputStream</code> audio callback, writes raw audio into a ring buffer.</li>
+    <li><strong>VAD / Segmentation Thread</strong> — Runs inside the audio callback context (real-time). Lightweight Silero inference; pushes segments into a <code>queue.Queue</code>.</li>
+    <li><strong>Worker Thread</strong> — Background <code>threading.Thread</code> that pops segments from the queue and runs the full ASR → LLM → TTS chain.</li>
+  </ul>
+  <p>This architecture ensures that VAD never blocks on network calls (ASR/LLM), and that audio capture never drops frames during heavy processing.</p>
+</section>
+
+<!-- ==================== 3. FILES OVERVIEW ==================== -->
+<section id="files">
+  <h2>3. Files Overview</h2>
+
+  <div class="table-wrap">
+  <table>
+    <tr><th>File</th><th>Lines</th><th>Role</th><th>Key Exports</th></tr>
+    <tr>
+      <td><code>__init__.py</code></td>
+      <td>0</td>
+      <td>Package marker</td>
+      <td>—</td>
+    </tr>
+    <tr>
+      <td><code>vad.py</code></td>
+      <td>169</td>
+      <td>Silero VAD voice activity detection</td>
+      <td><code>is_speech()</code>, <code>set_threshold()</code>, <code>get_threshold()</code>, <code>VADModuleError</code></td>
+    </tr>
+    <tr>
+      <td><code>asr.py</code></td>
+      <td>74</td>
+      <td>Google Speech Recognition</td>
+      <td><code>transcribe()</code>, <code>ASRModuleError</code></td>
+    </tr>
+    <tr>
+      <td><code>tts.py</code></td>
+      <td>190</td>
+      <td>edge-tts text-to-speech with pygame playback</td>
+      <td><code>TTSModule</code>, <code>TTSModuleError</code></td>
+    </tr>
+    <tr>
+      <td><code>face.py</code></td>
+      <td>834</td>
+      <td>Pygame animated robot face</td>
+      <td><code>FaceModule</code>, <code>FaceState</code>, <code>Theme</code>, <code>UISettings</code></td>
+    </tr>
+    <tr>
+      <td><code>pipeline.py</code></td>
+      <td>429</td>
+      <td>Voice pipeline orchestrator</td>
+      <td><code>VoicePipeline</code>, <code>WAKE_WORDS</code>, <code>MOVE_COMMANDS</code></td>
+    </tr>
+  </table>
+  </div>
+</section>
+
+<!-- ==================== 4. VAD ==================== -->
+<section id="vad">
+  <h2>4. vad.py — Silero Voice Activity Detection</h2>
+
+  <h3>4.1 Model Singleton</h3>
+  <p>The Silero VAD model is loaded once at the module level using a <strong>thread-safe singleton pattern</strong>:</p>
+  <ul>
+    <li>A module-global <code>_model</code> variable starts as <code>None</code>.</li>
+    <li>A <code>threading.Lock</code> guards initialisation in <code>_load_model_once()</code>.</li>
+    <li>On first call to any inference function, the lock is acquired; if <code>_model</code> is still <code>None</code>, the model is loaded via <code>torch.hub.load()</code>.</li>
+    <li>A <strong>local fallback path</strong> allows loading from a known local directory if the hub is unreachable, enabling offline operation.</li>
+  </ul>
+
+  <div class="screenshot-placeholder">Screenshot: Silero VAD model loading with fallback</div>
+
+  <h3>4.2 Audio Pre-processing</h3>
+  <p>Three helper functions prepare raw audio for Silero inference:</p>
+  <table>
+    <tr><th>Function</th><th>Purpose</th><th>Algorithm</th></tr>
+    <tr><td><code>to_mono_float32(audio)</code></td><td>Convert multi-channel int16 PCM to mono float32</td><td>Mean across channels → <code>astype(np.float32) / 32768.0</code></td></tr>
+    <tr><td><code>resample_linear(audio, orig_sr, target_sr)</code></td><td>Linear interpolation resampling</td><td>Computes ratio, creates index array, uses <code>np.interp</code> for linear interpolation</td></tr>
+    <tr><td><code>prepare_audio_chunk(audio, sample_rate)</code></td><td>End-to-end preparation pipeline</td><td>Mono → float32 → resample to 16 kHz → ensure minimum length (100 samples) → add batch dimension</td></tr>
+  </table>
+  <p>Silero VAD requires 16 kHz mono float32 input. The preparation pipeline handles any input sample rate and channel count, then adds the batch dimension expected by PyTorch.</p>
+
+  <h3>4.3 <code>is_speech()</code> — Core Inference</h3>
+  <p>The speech detection algorithm follows these steps:</p>
+  <ol>
+    <li>Prepare the audio chunk via <code>prepare_audio_chunk()</code>.</li>
+    <li>Run <code>_load_model_once()</code> to ensure the model is loaded.</li>
+    <li>Convert NumPy array to PyTorch tensor.</li>
+    <li>Execute inference with <code>torch.no_grad()</code> context manager for efficiency.</li>
+    <li>Extract the speech probability (scalar) from the model output.</li>
+    <li>Compare against the <strong>dynamic threshold</strong> (default ~0.5, adjustable via <code>set_threshold()</code>).</li>
+    <li>Return <code>True</code> if probability exceeds threshold, <code>False</code> otherwise.</li>
+  </ol>
+  <p>The threshold can be tuned per-environment: noisier rooms require higher thresholds; quiet rooms can use lower thresholds for maximum recall.</p>
+
+  <div class="screenshot-placeholder">Screenshot: is_speech() inference pipeline</div>
+
+  <h3>4.4 Dynamic Threshold Control</h3>
+  <p><code>set_threshold(threshold)</code> and <code>get_threshold()</code> provide runtime control over VAD sensitivity. This allows the pipeline to adapt to changing noise conditions without restarting.</p>
+
+  <h3>4.5 Error Handling</h3>
+  <p>A custom <code>VADModuleError(RuntimeError)</code> is raised for model loading failures, tensor conversion errors, or unexpected inference output shapes. This cleanly separates VAD errors from other system exceptions.</p>
+</section>
+
+<!-- ==================== 5. ASR ==================== -->
+<section id="asr">
+  <h2>5. asr.py — Google Speech Recognition</h2>
+
+  <h3>5.1 Architecture</h3>
+  <p>The ASR module wraps the <code>speech_recognition</code> library's <code>recognize_google()</code> API. It is stateless — every call to <code>transcribe()</code> sends audio data to Google's servers and returns the transcribed text.</p>
+
+  <h3>5.2 <code>transcribe()</code> — Transcription with Auto Language Detection</h3>
+  <p>The function accepts three parameters:</p>
+  <ul>
+    <li><code>audio_bytes</code> — Raw PCM audio data (bytes).</li>
+    <li><code>samplerate</code> — Sample rate of the audio.</li>
+    <li><code>language</code> — One of <code>'auto'</code>, <code>'ar'</code> (Arabic), or <code>'en'</code> (English).</li>
+  </ul>
+  <p><strong>Auto mode algorithm:</strong></p>
+  <ol>
+    <li>First attempt transcription with <code>language='ar-SA'</code> (Arabic).</li>
+    <li>If that succeeds, return the Arabic transcription.</li>
+    <li>If Arabic fails (network error, API error, or unrecognised speech), fall back to <code>language='en-US'</code> (English).</li>
+    <li>If both fail, raise <code>ASRModuleError</code>.</li>
+  </ol>
+  <p>This strategy ensures that bilingual users who mix Arabic and English get optimal recognition without manual language switching.</p>
+
+  <div class="screenshot-placeholder">Screenshot: ASR transcription with auto language detection</div>
+
+  <h3>5.3 Error Handling</h3>
+  <p><code>ASRModuleError(RuntimeError)</code> wraps all Google API errors (<code>RequestError</code>, <code>UnknownValueError</code>, network timeouts). The caller (<code>pipeline.py</code>) catches this and produces a graceful fallback response ("Sorry, I didn't catch that").</p>
+
+  <h3>5.4 Limitations</h3>
+  <ul>
+    <li>Requires internet connectivity (Google API).</li>
+    <li>Free tier has rate limits (approx. 50 requests/day for public API key; higher with paid key).</li>
+    <li>Latency varies with network conditions; typical response time is 200–800 ms.</li>
+    <li>Background noise significantly degrades accuracy — VAD pre-filtering is essential.</li>
+  </ul>
+</section>
+
+<!-- ==================== 6. TTS ==================== -->
+<section id="tts">
+  <h2>6. tts.py — edge-tts with Pygame Playback</h2>
+
+  <h3>6.1 Module Overview</h3>
+  <p>The TTS module uses <strong>edge-tts</strong> (Microsoft Edge TTS API wrapper) to generate natural-sounding speech, and <strong>pygame.mixer</strong> for non-blocking audio playback. It supports Arabic and English with appropriate neural voices.</p>
+
+  <h3>6.2 Language Detection</h3>
+  <p><code>detect_language(text)</code> scans Unicode code points to classify text:</p>
+  <ul>
+    <li>If any character falls in the Arabic block (U+0600–U+06FF), returns <code>'ar'</code>.</li>
+    <li>Otherwise returns <code>'en'</code>.</li>
+  </ul>
+  <p>This is a simple heuristic that works well for short utterances. Mixed-language text is treated as Arabic (which edge-tts handles gracefully with the Shakir voice).</p>
+
+  <h3>6.3 Voice Map</h3>
+  <table>
+    <tr><th>Language</th><th>Voice</th></tr>
+    <tr><td>Arabic (ar)</td><td><code>ar-EG-ShakirNeural</code></td></tr>
+    <tr><td>English (en)</td><td><code>en-US-GuyNeural</code></td></tr>
+  </table>
+
+  <h3>6.4 TTSModule Class</h3>
+  <table>
+    <tr><th>Method</th><th>Description</th></tr>
+    <tr><td><code>__init__(settings)</code></td><td>Initialises pygame mixer with configurable frequency, size, channels, and buffer size from settings dict.</td></tr>
+    <tr><td><code>set_callbacks(on_start, on_finish)</code></td><td>Registers callbacks invoked when speech starts/finishes. Used by FaceModule to switch to SPEAKING and back.</td></tr>
+    <tr><td><code>is_playing()</code></td><td>Returns <code>True</code> if pygame mixer is currently playing a sound channel (non-blocking poll).</td></tr>
+    <tr><td><code>stop()</code></td><td>Stops all pygame mixer channels immediately. Also sets an internal <code>stop_event</code> to abort pending generation.</td></tr>
+    <tr><td><code>speak(text, language)</code></td><td>High-level method: detects language, starts async TTS generation in a thread, plays the resulting file when ready. Non-blocking.</td></tr>
+    <tr><td><code>speak_and_wait(text, language)</code></td><td>Blocking variant — waits for generation and playback to finish before returning.</td></tr>
+  </table>
+
+  <h3>6.5 <code>_generate()</code> — Async TTS Generation</h3>
+  <p>Uses <code>asyncio.run()</code> to call edge-tts's <code>Communicate</code> API:</p>
+  <ol>
+    <li>Constructs an <code>edge_tts.Communicate</code> object with text and voice.</li>
+    <li>Streams audio chunks to a temporary WAV file on disk.</li>
+    <li>Checks <code>stop_event</code> periodically so interruption can cancel mid-generation.</li>
+    <li>Returns the file path upon success.</li>
+  </ol>
+
+  <h3>6.6 <code>_play()</code> — Threaded Playback</h3>
+  <p>Playback runs in a <code>threading.Thread</code>:</p>
+  <ol>
+    <li>Fires the <code>on_start</code> callback with the request ID (for face sync).</li>
+    <li>Loads the generated WAV file via <code>pygame.mixer.Sound()</code>.</li>
+    <li>Plays the sound and polls <code>stop_event</code> in a loop.</li>
+    <li>If stopped, calls <code>pygame.mixer.stop()</code> and cleans up the temp file.</li>
+    <li>On natural completion, fires the <code>on_finish</code> callback.</li>
+  </ol>
+
+  <div class="screenshot-placeholder">Screenshot: TTS generation and threaded playback</div>
+
+  <h3>6.7 Callback System</h3>
+  <p>The callback interface enables loose coupling with the face module:</p>
+  <pre><code>def on_speech_start(request_id: str):
+    face.set_state(FaceState.SPEAKING)
+
+def on_speech_finish(request_id: str):
+    face.set_state(FaceState.IDLE)
+
+tts.set_callbacks(on_start=on_speech_start, on_finish=on_speech_finish)</code></pre>
+
+  <h3>6.8 Error Handling</h3>
+  <p><code>TTSModuleError(RuntimeError)</code> is raised for generation failures (network errors, invalid voice, edge-tts API changes) and playback failures (corrupted audio, pygame initialisation issues).</p>
+</section>
+
+<!-- ==================== 7. FACE ==================== -->
+<section id="face">
+  <h2>7. face.py — Pygame Animated Robot Face</h2>
+
+  <h3>7.1 Overview</h3>
+  <p>The FaceModule is a self-contained pygame application that renders a stylised robot face on a 480×320 display at 60 FPS. It serves as the primary visual feedback mechanism for the voice pipeline, displaying different facial expressions corresponding to each pipeline state.</p>
+
+  <h3>7.2 State Machine</h3>
+  <p>The <code>FaceState</code> enum defines seven states:</p>
+  <table>
+    <tr><th>State</th><th>Description</th><th>Visual Cue</th></tr>
+    <tr><td><code>IDLE</code></td><td>Default waiting state</td><td>Gentle glow pulse, eyes softly open, occasional blinks</td></tr>
+    <tr><td><code>LISTENING</code></td><td>Microphone active, VAD detecting speech</td><td>Ears glow, eyes attentive, slight head tilt</td></tr>
+    <tr><td><code>THINKING</code></td><td>LLM generating response</td><td>Eyes looking upward, thinking dots animation, reduced blink rate</td></tr>
+    <tr><td><code>SPEAKING</code></td><td>TTS playback active</td><td>Mouth oscillates with audio, eyebrows expressive</td></tr>
+    <tr><td><code>HAPPY</code></td><td>Positive interaction (e.g., successful command)</td><td>Eye crescents (smile), brighter glow, higher brow arch</td></tr>
+    <tr><td><code>CURIOUS</code></td><td>Question or uncertain input</td><td>Head tilt, one eyebrow raised, pupil drift to side</td></tr>
+    <tr><td><code>SLEEP</code></td><td>Inactivity timeout (30s)</td><td>Eyes closed, dimmed colours, slow breathing glow</td></tr>
+  </table>
+
+  <h3>7.3 Animation Engine</h3>
+  <p>The animation system uses three core techniques:</p>
+
+  <h4>Easing Functions</h4>
+  <ul>
+    <li><code>ease_out_quad(t)</code> — Quadratic deceleration, used for eye blinks and mouth movements.</li>
+    <li><code>ease_in_out_cubic(t)</code> — Smooth acceleration-deceleration, used for state transitions (0→1 interpolator).</li>
+    <li><code>lerp(a, b, t)</code> — Linear interpolation between values.</li>
+    <li><code>damp(current, target, factor)</code> — Exponential decay toward target (frequency-independent smoothing).</li>
+  </ul>
+
+  <h4>State Transitions</h4>
+  <p>When <code>set_state(new_state)</code> is called, the module records the current visual parameters as "from" values and the target state's parameters as "to" values, then interpolates using <code>ease_in_out_cubic</code> over a fixed duration (~0.4s). This creates smooth, organic-looking transitions rather than jarring cuts.</p>
+
+  <div class="screenshot-placeholder">Screenshot: FaceModule main loop and state transitions</div>
+
+  <h4>Eye Animation</h4>
+  <p>The eyes are the most expressive element:</p>
+  <ul>
+    <li><strong>Blink System:</strong> Uses asymmetric blink probabilities — a random timer triggers a blink (both eyes close rapidly via <code>ease_out_quad</code> over ~100 ms). The probability is slightly higher for the left eye, creating a natural, asymmetric micro-expression.</li>
+    <li><strong>Pupil Drift:</strong> Pupils slowly drift within the eye using Perlin-like noise (sinusoidal with random phase). This prevents the "staring" effect and makes the face feel alive.</li>
+    <li><strong>Iris Rendering:</strong> Each eye consists of a white sclera, a coloured iris (theme-dependent), and a black pupil. The iris size changes with ambient light (settings-controlled).</li>
+  </ul>
+
+  <div class="screenshot-placeholder">Screenshot: Eye animation with blink system and pupil drift</div>
+
+  <h3>7.4 Themes</h3>
+  <p>Three built-in themes (defined as <code>Theme</code> dataclass instances):</p>
+  <table>
+    <tr><th>Theme</th><th>Primary Colour</th><th>Glow Colour</th><th>Mood</th></tr>
+    <tr><td><code>dark_blue</code></td><td>#1a2332</td><td>#58a6ff</td><td>Default, calm, professional</td></tr>
+    <tr><td><code>cyber_green</code></td><td>#0d2818</td><td>#3fb950</td><td>Hacker aesthetic, energetic</td></tr>
+    <tr><td><code>monochrome</code></td><td>#1a1a1a</td><td>#e6edf3</td><td>High contrast, minimal</td></tr>
+  </table>
+  <p>Themes control all visual aspects: background, eye colour, glow colour, mouth colour, eyebrow colour, and accent hues.</p>
+
+  <h3>7.5 Settings Panel</h3>
+  <p>A swipeable settings panel overlays the face:</p>
+  <ul>
+    <li><strong>LAN toggle</strong> — Switch between local and network mode.</li>
+    <li><strong>Speed slider</strong> — Adjust animation speed multiplier (0.5×–2.0×).</li>
+    <li><strong>Volume slider</strong> — TTS output volume.</li>
+    <li><strong>Vision mode toggle</strong> — Enable/disable camera module.</li>
+    <li><strong>Mic mute toggle</strong> — Mute/unmute the microphone.</li>
+  </ul>
+
+  <h4>Swipe Gesture Detection</h4>
+  <p>The panel uses a simple gesture recognition system:</p>
+  <ol>
+    <li>Track mouse-down position and time.</li>
+    <li>On mouse-up, compute delta X and delta time.</li>
+    <li>If horizontal velocity exceeds threshold (100 px / 300 ms), classify as swipe.</li>
+    <li>Left swipe opens panel; right swipe closes it (or vice versa depending on layout).</li>
+  </ol>
+
+  <div class="screenshot-placeholder">Screenshot: Settings panel rendering and interaction</div>
+
+  <h3>7.6 Rendering Pipeline</h3>
+  <p>Each frame (<code>Tick()</code> call) executes:</p>
+  <ol>
+    <li>Clear surface with theme background colour.</li>
+    <li>Update animation parameters (blink timer, pupil position, mouth state, glow phase).</li>
+    <li>If transitioning, compute interpolation factor from state transition timer.</li>
+    <li>Draw background elements (glow circles, vignette).</li>
+    <li>Draw eyes (sclera → iris → pupil → highlights).</li>
+    <li>Draw mouth (oscillating bezier or ellipse for speaking).</li>
+    <li>Draw eyebrows (positioned by state and emotion).</li>
+    <li>Draw overlay text (FPS, temperature if enabled).</li>
+    <li>If settings panel is open, draw panel overlay on top.</li>
+    <li>Update display (<code>pygame.display.flip()</code>).</li>
+  </ol>
+  <p>The frame rate is capped at 60 FPS via <code>pygame.time.Clock.tick(60)</code>.</p>
+
+  <h3>7.7 Startup Animation</h3>
+  <p>On initialisation, the face plays a startup sequence: eyes open gradually from 0 px height to 55 px over ~1.5 seconds, simulating the robot "waking up." This creates a polished first-impression.</p>
+
+  <h3>7.8 Idle Dimming</h3>
+  <p>After 30 seconds of inactivity (no state change, no user input), the face gradually dims and transitions to the <code>SLEEP</code> state. Glow intensity reduces to 20%, pupils stop drifting, and blink rate slows. Any new state change or user input immediately wakes the face.</p>
+</section>
+
+<!-- ==================== 8. PIPELINE ==================== -->
+<section id="pipeline">
+  <h2>8. pipeline.py — Voice Pipeline Orchestrator</h2>
+
+  <h3>8.1 Overview</h3>
+  <p><code>VoicePipeline</code> is the central orchestrator that connects all voice subsystems. It manages audio capture, VAD segmentation, ASR transcription, wake word detection, motor command routing, LLM integration, and TTS synthesis in a coherent pipeline.</p>
+
+  <h3>8.2 Wake Words</h3>
+  <p>Defined in the <code>WAKE_WORDS</code> tuple, supporting both Arabic and English:</p>
+  <pre><code>WAKE_WORDS = ("يا روبو", "روبو", "ropo", "hey robo", "ok robo")</code></pre>
+  <p>Wake word detection uses <strong>fuzzy matching</strong> (case-insensitive containment check). The matched prefix is stripped from the transcribed text before further processing. This allows natural phrasing like "يا روبو، تحرك إلى الأمام" or "hey robo, what's the weather?"</p>
+
+  <h3>8.3 Motor Commands</h3>
+  <p><code>MOVE_COMMANDS</code> maps natural language phrases to motor instructions:</p>
+  <pre><code>MOVE_COMMANDS = {
+    "تحرك": "forward",
+    "forward": "forward",
+    "go forward": "forward",
+    "انعطف": "left",
+    "turn left": "left",
+    "left": "left",
+    # ... etc
+}</code></pre>
+  <p>Text is checked against these commands before LLM invocation, enabling low-latency movement response without LLM overhead.</p>
+
+  <h3>8.4 Filler Phrases</h3>
+  <p><code>FILLER_PHRASES</code> provides thinking indicators in both languages:</p>
+  <pre><code>FILLER_PHRASES = {
+    "ar": ["لحظة من فضلك...", "دعني أفكر...", "حسناً..."],
+    "en": ["Let me think...", "One moment...", "Okay..."]
+}</code></pre>
+  <p>A random filler is played via TTS while the LLM is generating, masking latency.</p>
+
+  <h3>8.5 Audio Capture and VAD Segmentation</h3>
+
+  <h4><code>run_forever()</code></h4>
+  <p>This method:</p>
+  <ol>
+    <li>Opens a <code>sounddevice.InputStream</code> with a callback function.</li>
+    <li>The callback receives raw audio chunks (typically 512 or 1024 frames).</li>
+    <li>Each chunk is fed to <code>is_speech()</code> from <code>vad.py</code>.</li>
+    <li>Speech frames are accumulated; silence frames reset a silence counter.</li>
+    <li>When silence exceeds 1.0 second, the accumulated speech buffer is packaged as a segment and pushed to the <code>queue.Queue</code>.</li>
+  </ol>
+
+  <div class="screenshot-placeholder">Screenshot: VoicePipeline audio capture callback</div>
+  <div class="screenshot-placeholder">Screenshot: VAD-based segment boundary detection</div>
+
+  <h4>Segment Queue</h4>
+  <p>A <code>queue.Queue(maxsize=8)</code> holds pending segments. If the queue is full (worker thread is backed up), the oldest segment is dropped (<strong>drop-oldest</strong> policy). This ensures real-time responsiveness: the system always processes the most recent utterance.</p>
+
+  <h3>8.6 <code>_worker_loop()</code> — Segment Processing</h3>
+  <p>Runs in a dedicated <code>threading.Thread</code>. For each segment dequeued:</p>
+
+  <div class="screenshot-placeholder">Screenshot: Segment processing with LLM integration</div>
+
+  <ol>
+    <li><strong>ASR:</strong> Call <code>asr.transcribe()</code> with the segment's audio data.</li>
+    <li><strong>Wake Word Check:</strong> Test against <code>WAKE_WORDS</code>. If no wake word detected, discard (robot ignores non-addressed speech).</li>
+    <li><strong>Motor Command Check:</strong> Test against <code>MOVE_COMMANDS</code>. If matched, execute motor command immediately and skip LLM.</li>
+    <li><strong>Filler TTS:</strong> Play a random filler phrase from <code>FILLER_PHRASES</code> (non-blocking).</li>
+    <li><strong>Face State:</strong> Set face to <code>THINKING</code>.</li>
+    <li><strong>LLM:</strong> Call external <code>LLMModule.generate()</code> with the query and conversation context.</li>
+    <li><strong>Response TTS:</strong> Call <code>tts.speak()</code> with the LLM response text.</li>
+    <li><strong>Face State:</strong> Set face to <code>SPEAKING</code> (via TTS callback) → back to <code>IDLE</code> on completion.</li>
+  </ol>
+
+  <h3>8.7 Interrupt Handling</h3>
+  <p>If a new speech segment arrives while TTS is still playing from a previous turn, the pipeline:</p>
+  <ol>
+    <li>Calls <code>tts.stop()</code> to stop current playback and abort pending generation.</li>
+    <li>Cancels any in-progress LLM generation (if the LLM module supports cancellation).</li>
+    <li>Begins processing the new segment immediately.</li>
+  </ol>
+  <p>This enables natural conversational flow — the robot can be interrupted and will respond to the latest query.</p>
+
+  <h3>8.8 Error Handling Strategy</h3>
+  <table>
+    <tr><th>Failure Point</th><th>Handling</th></tr>
+    <tr><td>VAD model load failure</td><td>Log error, retry on next inference, system remains operational without VAD (always treat as speech)</td></tr>
+    <tr><td>ASR timeout / network error</td><td>Log warning, play "I didn't catch that" TTS, continue listening</td></tr>
+    <tr><td>LLM generation error</td><td>Log error, play "I'm having trouble thinking" TTS</td></tr>
+    <tr><td>TTS generation failure</td><td>Log error, display response text on face overlay</td></tr>
+    <tr><td>Queue overflow</td><td>Drop oldest segment (non-error log)</td></tr>
+  </table>
+  <p>The system is designed to <strong>never crash</strong> from a single component failure; each error is caught, logged, and handled gracefully.</p>
+</section>
+
+<!-- ==================== 9. CODE WALKTHROUGH ==================== -->
+<section id="walkthrough">
+  <h2>9. Code Walkthrough — Screenshot Placeholders</h2>
+  <p>The following annotated screenshots illustrate the most important code sections in the voice pipeline. Each placeholder represents a real code region with annotations.</p>
+
+  <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px;">
+
+  <div>
+    <div class="screenshot-placeholder">1 — Silero VAD model loading with fallback</div>
+    <p style="font-size: 0.85rem; color: #8b949e;">Module-level singleton: <code>_load_model_once()</code>, threading.Lock, torch.hub.load → local fallback path.</p>
+  </div>
+
+  <div>
+    <div class="screenshot-placeholder">2 — <code>is_speech()</code> inference pipeline</div>
+    <p style="font-size: 0.85rem; color: #8b949e;">Audio prep, tensor conversion, torch.no_grad inference, probability extraction, threshold comparison.</p>
+  </div>
+
+  <div>
+    <div class="screenshot-placeholder">3 — ASR transcription with auto language detection</div>
+    <p style="font-size: 0.85rem; color: #8b949e;"><code>transcribe()</code> with Arabic-first fallback strategy, Google API calls, error wrapping.</p>
+  </div>
+
+  <div>
+    <div class="screenshot-placeholder">4 — TTS generation and threaded playback</div>
+    <p style="font-size: 0.85rem; color: #8b949e;"><code>_generate()</code> async edge-tts → temp WAV; <code>_play()</code> thread with stop_event polling and callbacks.</p>
+  </div>
+
+  <div>
+    <div class="screenshot-placeholder">5 — FaceModule main loop and state transitions</div>
+    <p style="font-size: 0.85rem; color: #8b949e;"><code>Tick()</code> at 60 FPS, <code>set_state()</code> with ease_in_out_cubic interpolation, state machine dispatch.</p>
+  </div>
+
+  <div>
+    <div class="screenshot-placeholder">6 — Eye animation with blink system and pupil drift</div>
+    <p style="font-size: 0.85rem; color: #8b949e;">Asymmetric blink probability, sinusoidal pupil drift, sclera/iris/pupil rendering layers.</p>
+  </div>
+
+  <div>
+    <div class="screenshot-placeholder">7 — Settings panel rendering and interaction</div>
+    <p style="font-size: 0.85rem; color: #8b949e;">Swipe gesture detection, slider controls (speed, volume), LAN/vision/mic toggles, overlay compositing.</p>
+  </div>
+
+  <div>
+    <div class="screenshot-placeholder">8 — VoicePipeline audio capture callback</div>
+    <p style="font-size: 0.85rem; color: #8b949e;"><code>sounddevice.InputStream</code> callback, raw audio → buffer, sample rate handling.</p>
+  </div>
+
+  <div>
+    <div class="screenshot-placeholder">9 — VAD-based segment boundary detection</div>
+    <p style="font-size: 0.85rem; color: #8b949e;">Speech/silence frame accumulation, 1-second silence timeout, segment creation and enqueue.</p>
+  </div>
+
+  <div>
+    <div class="screenshot-placeholder">10 — Segment processing with LLM integration</div>
+    <p style="font-size: 0.85rem; color: #8b949e;"><code>_process_segment()</code> full flow: ASR → wake word → motor command → filler TTS → LLM → response TTS.</p>
+  </div>
+
+  <div>
+    <div class="screenshot-placeholder">11 — Wake word fuzzy matching</div>
+    <p style="font-size: 0.85rem; color: #8b949e;">Case-insensitive containment check against <code>WAKE_WORDS</code> tuple; prefix stripping.</p>
+  </div>
+
+  <div>
+    <div class="screenshot-placeholder">12 — Pipeline error handling and graceful degradation</div>
+    <p style="font-size: 0.85rem; color: #8b949e;">try/except blocks around each stage, fallback TTS, queue overflow drop-oldest policy.</p>
+  </div>
+
+  </div>
+</section>
+
+<!-- ==================== 10. SEQUENCE FLOW ==================== -->
+<section id="sequence">
+  <h2>10. Sequence Flow — Complete Conversation Turn</h2>
+  <p>The following sequence diagram traces a full interaction: from user speech to robot spoken response.</p>
+
+  <div class="seq-diagram">┌──────────┐    ┌──────────┐    ┌──────────┐    ┌──────────┐    ┌──────────┐    ┌──────────┐
+│  User    │    │Pipeline  │    │VAD/Silero│    │  ASR    │    │  LLM    │    │  TTS    │
+└────┬─────┘    └────┬─────┘    └────┬─────┘    └────┬─────┘    └────┬─────┘    └────┬─────┘
+     │               │               │               │               │               │
+     │  "يا روبو،    │               │               │               │               │
+     │   ما الطقس؟"  │               │               │               │               │
+     │──────────────&gt;│               │               │               │               │
+     │               │  audio chunk  │               │               │               │
+     │               │──────────────&gt;│               │               │               │
+     │               │               │ is_speech()   │               │               │
+     │               │&lt;──────────────│ True           │               │               │
+     │               │               │               │               │               │
+     │               │  accumulate...│               │               │               │
+     │               │   (1.0s silence)              │               │               │
+     │               │               │               │               │               │
+     │               │  segment ready                │               │               │
+     │               │──────────────&gt;│               │               │               │
+     │               │  segment      │               │               │               │
+     │               │────────────────────────────────&gt;│               │               │
+     │               │               │               │               │               │
+     │               │               │               │ transcribe()  │               │
+     │               │               │               │──────────────&gt;│               │
+     │               │               │               │  "ما الطقس؟"  │               │
+     │               │               │               │&lt;──────────────│               │
+     │               │               │               │               │               │
+     │               │  wake word check ✓            │               │               │
+     │               │  motor command? — no           │               │               │
+     │               │  → forward to LLM              │               │               │
+     │               │               │               │               │               │
+     │               │  filler TTS   │               │               │               │
+     │               │  "لحظة من    │               │               │               │
+     │               │   فضلك..."                      │               │               │
+     │               │────────────────────────────────────────────────&gt;│               │
+     │               │               │               │  query         │               │
+     │               │               │               │──────────────&gt;│               │
+     │               │               │               │               │  generate()   │
+     │               │               │               │               │──────────────&gt;│
+     │               │               │               │               │&lt;──────────────│
+     │               │               │               │&lt;──────────────│               │
+     │               │               │               │  response      │               │
+     │               │               │               │  "الطقس مشمس"  │               │
+     │               │               │               │               │               │
+     │               │  response TTS │               │               │               │
+     │               │  "الطقس مشمس" │               │               │               │
+     │               │────────────────────────────────────────────────&gt;│               │
+     │               │               │               │               │  speak()      │
+     │               │               │               │               │──────────────&gt;│
+     │  "الطقس مشمس  │               │               │               │               │
+     │&lt;──────────────│               │               │               │               │
+     │               │               │               │               │               │
+</div>
+
+  <h3>Step-by-Step</h3>
+  <ol>
+    <li><strong>User speaks</strong> — "يا روبو، ما الطقس؟" ("Hey Robo, what's the weather?")</li>
+    <li><strong>Audio Capture</strong> — sounddevice InputStream callback receives 512-sample float32 chunks.</li>
+    <li><strong>VAD</strong> — Each chunk is fed to Silero VAD; speech frames are accumulated.</li>
+    <li><strong>Segment Boundary</strong> — After 1.0 seconds of silence following speech, the buffer is packaged as a segment.</li>
+    <li><strong>ASR</strong> — Google Speech Recognition transcribes the audio to text: "ما الطقس".</li>
+    <li><strong>Wake Word</strong> — Pipeline checks against WAKE_WORDS; "يا روبو" matches → stripped prefix → query = "ما الطقس".</li>
+    <li><strong>Motor Command</strong> — Query checked against MOVE_COMMANDS; no match → proceed to LLM.</li>
+    <li><strong>Filler TTS</strong> — Random Arabic filler "لحظة من فضلك..." plays while LLM processes.</li>
+    <li><strong>Face State → THINKING</strong> — Eyes look upward, thinking animation.</li>
+    <li><strong>LLM</strong> — Query sent to LLMModule with conversation context; response generated: "الطقس مشمس اليوم" ("The weather is sunny today").</li>
+    <li><strong>Face State → SPEAKING</strong> — TTS callbacks trigger state change; mouth animation activates.</li>
+    <li><strong>TTS</strong> — edge-tts generates Arabic speech; pygame plays it through speaker.</li>
+    <li><strong>User hears</strong> — Robot response: "الطقس مشمس اليوم".</li>
+    <li><strong>Face State → IDLE</strong> — TTS completion callback triggers return to idle state with soft glow pulse.</li>
+  </ol>
+
+  <div class="callout info">
+    <strong>Total loop latency</strong>: Typically 1.5–3.0 seconds depending on ASR network latency, LLM generation speed, and TTS synthesis time. The filler phrase masks up to 2 seconds of this delay.
+  </div>
+</section>
+
+<!-- ==================== 11. FOLDER INTEGRATION ==================== -->
+<section id="integration">
+  <h2>11. Folder Integration</h2>
+  <p>The <code>voice/</code> package does not exist in isolation — it integrates with several sibling packages in the Rope robot codebase.</p>
+
+  <h3>11.1 Voice ↔ LLM</h3>
+  <p><code>pipeline.py</code> imports and uses <code>LLMModule</code> for response generation. The interface expects a <code>generate(query, context)</code> method that returns a string. The pipeline passes the wake-word-stripped query along with conversation history for context-aware responses.</p>
+  <ul>
+    <li>LLM is <strong>not</strong> called for pure motor commands (latency optimisation).</li>
+    <li>Interrupt support: if a new segment arrives during LLM generation, the pipeline signals cancellation to the LLM module (if supported).</li>
+  </ul>
+
+  <h3>11.2 Voice ↔ Vision</h3>
+  <p>Through a <code>vision_context_getter</code> callback, the pipeline can inject visual context into LLM prompts. For example:</p>
+  <pre><code>vision_context_getter = lambda: camera_module.get_description()
+llm_response = llm.generate(query, context=vision_context_getter())</code></pre>
+  <p>This enables questions like "What do you see?" or "Is there a red object in front of you?"</p>
+
+  <h3>11.3 Voice ↔ Hardware (MotorController)</h3>
+  <p>The <code>MOVE_COMMANDS</code> dictionary maps natural language movement commands to motor instructions. When a movement command is detected, the pipeline calls <code>MotorController.execute(command)</code>:</p>
+  <pre><code>if command := MOVE_COMMANDS.get(query.lower()):
+    motor_controller.execute(command)  # e.g., "forward" → motors drive forward
+    tts.speak_and_wait("OK", language="en")
+    return  # skip LLM</code></pre>
+  <p>This provides near-instantaneous movement response (sub-100ms from speech end to motor start).</p>
+
+  <h3>11.4 Voice ↔ Config</h3>
+  <p>All voice modules read configuration from a shared <code>Config</code> object that provides:</p>
+  <table>
+    <tr><th>Setting</th><th>Used By</th><th>Default</th></tr>
+    <tr><td><code>vad_threshold</code></td><td>vad.py — speech detection sensitivity</td><td>0.5</td></tr>
+    <tr><td><code>sample_rate</code></td><td>pipeline.py — audio capture rate</td><td>16000</td></tr>
+    <tr><td><code>language_mode</code></td><td>pipeline.py — default ASR language</td><td>"auto"</td></tr>
+    <tr><td><code>tts_volume</code></td><td>tts.py — playback volume</td><td>0.8</td></tr>
+    <tr><td><code>face_theme</code></td><td>face.py — visual theme selection</td><td>"dark_blue"</td></tr>
+    <tr><td><code>mic_device</code></td><td>pipeline.py — microphone device index</td><td>None (default)</td></tr>
+  </table>
+
+  <h3>11.5 Integration Diagram</h3>
+  <div class="arch-diagram">
+    <div class="block">voice/</div>
+    <span class="arrow"> ──ASR text──&gt; </span>
+    <div class="block purple">LLM module</div>
+    <br>
+    <div class="block">voice/</div>
+    <span class="arrow"> ──context──&gt; </span>
+    <div class="block green">Vision module</div>
+    <br>
+    <div class="block">voice/</div>
+    <span class="arrow"> ──commands──&gt; </span>
+    <div class="block orange">Motor Controller</div>
+    <br>
+    <div class="block">voice/</div>
+    <span class="arrow"> ──config──&gt; </span>
+    <div class="block">Config</div>
+    <br>
+    <div class="block">voice/</div>
+    <span class="arrow"> ──state──&gt; </span>
+    <div class="block red">FaceModule</div>
+  </div>
+</section>
+
+<!-- ==================== 12. TECHNICAL NOTES ==================== -->
+<section id="notes">
+  <h2>12. Technical Notes</h2>
+
+  <h3>12.1 Silero VAD</h3>
+  <ul>
+    <li><strong>Model</strong>: Pre-trained Silero VAD v4/v5 (<code>snakers4/silero-vad</code>).</li>
+    <li><strong>Input format</strong>: 16 kHz mono float32, 512-sample frames (~32 ms).</li>
+    <li><strong>Output</strong>: Single probability in [0, 1]; >threshold → speech.</li>
+    <li><strong>Performance</strong>: ~1–3 ms per inference on CPU (PyTorch). Negligible impact on audio capture latency.</li>
+    <li><strong>Design pattern</strong>: Singleton with module-level lock for thread-safe lazy loading.</li>
+    <li><strong>Fallback</strong>: If torch.hub is unavailable, loads from a local path <code>_model_local_path</code>.</li>
+  </ul>
+
+  <h3>12.2 Google Speech Recognition</h3>
+  <ul>
+    <li><strong>Library</strong>: <code>speech_recognition</code> (PyPI: <code>SpeechRecognition</code>).</li>
+    <li><strong>API</strong>: Google Web Speech API (free tier, no API key required).</li>
+    <li><strong>Language codes</strong>: <code>ar-SA</code> (Arabic Saudi Arabia), <code>en-US</code> (English US).</li>
+    <li><strong>Limitations</strong>: Requires internet; ~50 free requests/day per IP; ~200–800 ms latency.</li>
+    <li><strong>Error wrapping</strong>: <code>ASRModuleError</code> catches <code>speech_recognition.RequestError</code>, <code>UnknownValueError</code>, and generic exceptions.</li>
+  </ul>
+
+  <h3>12.3 edge-tts</h3>
+  <ul>
+    <li><strong>Library</strong>: <code>edge-tts</code> — Python wrapper for Microsoft Edge TTS service.</li>
+    <li><strong>Voices</strong>: <code>ar-EG-ShakirNeural</code> (Arabic, Egypt), <code>en-US-GuyNeural</code> (English, US).</li>
+    <li><strong>Output format</strong>: WAV (16-bit PCM, 24 kHz by default).</li>
+    <li><strong>Generation</strong>: Async via <code>asyncio.run()</code>; streaming to temp file.</li>
+    <li><strong>Playback</strong>: Pygame mixer (SDL-based), runs in separate thread with stop event for interruption.</li>
+  </ul>
+
+  <h3>12.4 Pygame</h3>
+  <ul>
+    <li><strong>Version</strong>: pygame 2.x.</li>
+    <li><strong>Mixer initialisation</strong>: Configurable frequency, size, channels, buffer via settings dict.</li>
+    <li><strong>Face resolution</strong>: 480×320 pixels, scaled to fit display.</li>
+    <li><strong>Frame rate</strong>: 60 FPS capped via <code>pygame.time.Clock.tick(60)</code>.</li>
+  </ul>
+
+  <h3>12.5 Sounddevice</h3>
+  <ul>
+    <li><strong>Library</strong>: <code>sounddevice</code> — PortAudio wrapper for Python.</li>
+    <li><strong>Stream type</strong>: <code>InputStream</code> with callback (non-blocking).</li>
+    <li><strong>Callback thread</strong>: Runs at high priority; must not block — VAD inference is the only operation performed inside the callback.</li>
+    <li><strong>Sample rate</strong>: Configurable (default 16000 Hz).</li>
+  </ul>
+
+  <h3>12.6 Threading Design Patterns</h3>
+  <table>
+    <tr><th>Pattern</th><th>Usage</th><th>Implementation</th></tr>
+    <tr><td><strong>Producer–Consumer</strong></td><td>Audio callback → segment queue → worker thread</td><td><code>queue.Queue</code> with maxsize=8, drop-oldest on overflow</td></tr>
+    <tr><td><strong>Singleton</strong></td><td>Silero VAD model</td><td>Module-level global + threading.Lock + double-checked locking</td></tr>
+    <tr><td><strong>Callback / Observer</strong></td><td>TTS → Face state sync</td><td><code>set_callbacks(on_start, on_finish)</code> registered by pipeline</td></tr>
+    <tr><td><strong>Threaded Non-blocking</strong></td><td>TTS playback</td><td><code>threading.Thread</code> with stop_event for cancellation</td></tr>
+    <tr><td><strong>State Machine</strong></td><td>Face animation</td><td><code>FaceState</code> enum + <code>set_state()</code> with transition interpolation</td></tr>
+    <tr><td><strong>Graceful Degradation</strong></td><td>All pipeline stages</td><td>try/except at each stage, logged errors, fallback behaviours</td></tr>
+  </table>
+</section>
+
+<!-- ==================== 13. ACADEMIC EXPLANATION ==================== -->
+<section id="academic">
+  <h2>13. Academic Explanation</h2>
+
+  <h3>13.1 Pipeline Architecture</h3>
+  <p>The voice system implements a <strong>linear pipeline architecture</strong> with queue-based decoupling. Each stage (VAD, ASR, LLM, TTS) is a discrete processing element that transforms input data and passes it to the next stage. This design is derived from the <strong>pipes-and-filters</strong> architectural pattern commonly used in signal processing and stream-processing systems.</p>
+
+  <p><strong>Advantages of this architecture:</strong></p>
+  <ul>
+    <li><strong>Modularity</strong> — Each stage can be developed, tested, and replaced independently. The ASR module could be swapped from Google Speech Recognition to Whisper or Vosk without affecting other stages.</li>
+    <li><strong>Separation of concerns</strong> — Audio capture runs in a real-time callback thread; VAD runs lightweight inference; heavy processing (ASR, LLM) is offloaded to a worker thread.</li>
+    <li><strong>Fault isolation</strong> — A failure in any single stage (e.g., ASR network timeout) is caught locally and does not crash the pipeline.</li>
+    <li><strong>Testability</strong> — Each module can be unit-tested with synthetic inputs (e.g., test VAD with known speech/silence vectors, test ASR with pre-recorded WAV files).</li>
+  </ul>
+
+  <p><strong>Trade-offs:</strong></p>
+  <ul>
+    <li><strong>Latency accumulation</strong> — Total response time is the sum of all stage latencies. Mitigated by filler TTS (masks LLM latency) and parallel execution where possible.</li>
+    <li><strong>Queue overflow</strong> — Under high input rate, the segment queue fills and segments are dropped. The drop-oldest policy prioritises the most recent utterance (recency bias), which is acceptable for conversational turn-taking.</li>
+  </ul>
+
+  <h3>13.2 Bilingual Support</h3>
+  <p>The system supports Arabic and English at every level:</p>
+  <table>
+    <tr><th>Stage</th><th>Bilingual Strategy</th></tr>
+    <tr><td>VAD</td><td>Language-agnostic (Silero VAD works on any speech regardless of language).</td></tr>
+    <tr><td>ASR</td><td>Auto mode: tries Arabic first, falls back to English. This exploits the fact that Arabic ASR models often fail on English phrases (producing gibberish), while English ASR models fail on Arabic — so a sequential fallback is effective.</td></tr>
+    <tr><td>Wake Word</td><td>Bilingual wake words; <code>str.lower().contains()</code> fuzzy matching works for both languages.</td></tr>
+    <tr><td>LLM</td><td>Receives the query in its original language; typically responds in the same language (LLM language detection).</td></tr>
+    <tr><td>TTS</td><td>Unicode-range detection switches voice: <code>ar-EG-ShakirNeural</code> for Arabic, <code>en-US-GuyNeural</code> for English.</td></tr>
+    <tr><td>Face</td><td>Visual state is language-independent — expressions are universal.</td></tr>
+  </table>
+
+  <p>This bilingual design is critical for the target deployment environment (Arabic-speaking regions with frequent English code-switching).</p>
+
+  <h3>13.3 Real-Time Constraints</h3>
+  <p>The system operates under soft real-time constraints:</p>
+  <ul>
+    <li><strong>Audio capture</strong>: The PortAudio callback must complete within the buffer duration (typically 512 samples / 16000 Hz = 32 ms). VAD inference (~1–3 ms) easily meets this.</li>
+    <li><strong>End-to-end latency</strong>: A conversational response should complete within 3–5 seconds to feel natural. The pipeline achieves this through:
+      <ul>
+        <li>Filler TTS (masks LLM latency by up to 2 seconds).</li>
+        <li>Motor command bypass (skips LLM entirely for movement commands).</li>
+        <li>Non-blocking TTS playback (speech begins as soon as audio is generated, streaming-style).</li>
+      </ul>
+    </li>
+    <li><strong>Interrupt responsiveness</strong>: The stop_event pattern allows interruption within ~50 ms of a new utterance.</li>
+  </ul>
+
+  <h3>13.4 Graceful Degradation</h3>
+  <p>A key design principle is that the system should remain operational even when individual components fail. The degradation hierarchy is:</p>
+
+  <div class="arch-diagram">
+    <div style="display: flex; flex-direction: column; gap: 8px; align-items: center;">
+      <div class="block green" style="border-color: #3fb950;">Full operation (all modules)</div>
+      <span style="color: #484f58;">↓</span>
+      <div class="block" style="border-color: #d29922;">ASR offline → text input fallback</div>
+      <span style="color: #484f58;">↓</span>
+      <div class="block" style="border-color: #d29922;">LLM offline → canned responses + motor cmd</div>
+      <span style="color: #484f58;">↓</span>
+      <div class="block" style="border-color: #f85149;">TTS offline → face-only display mode</div>
+      <span style="color: #484f58;">↓</span>
+      <div class="block red" style="border-color: #f85149;">VAD offline → always-listening fallback</div>
+    </div>
+  </div>
+
+  <p>At every degradation level, the robot remains functional — even if only to display expressions on the face module or execute basic motor commands from textual input.</p>
+
+  <h3>13.5 Future Improvements</h3>
+  <p>Several enhancements are identified for future iterations:</p>
+
+  <h4>Short-term (incremental)</h4>
+  <ul>
+    <li><strong>On-device ASR</strong>: Replace Google Speech Recognition with Whisper (small model) or Vosk for offline operation and lower latency.</li>
+    <li><strong>Voice activity confirmation</strong>: Play a subtle tone when VAD triggers, improving user awareness.</li>
+    <li><strong>Emotion detection from text</strong>: Analyse LLM response sentiment to drive FaceState (e.g., happy response → HAPPY face).</li>
+  </ul>
+
+  <h4>Medium-term</h4>
+  <ul>
+    <li><strong>Speaker diarisation</strong>: Distinguish multiple speakers and maintain separate context per speaker.</li>
+    <li><strong>Dynamic VAD threshold</strong>: Use signal-to-noise ratio estimation to adjust threshold in real-time.</li>
+    <li><strong>Lip-sync</strong>: Drive mouth animation from TTS audio features (amplitude envelope or phonemes) for realistic synchronisation.</li>
+  </ul>
+
+  <h4>Long-term</h4>
+  <ul>
+    <li><strong>End-to-end neural model</strong>: Replace the staged pipeline with a single sequence-to-sequence model (speech → speech) for lower latency and higher naturalness.</li>
+    <li><strong>Continuous barge-in</strong>: Allow the user to interrupt mid-utterance with seamless handling, similar to modern voice assistants.</li>
+    <li><strong>Multi-modal fusion</strong>: Integrate vision, audio, and touch inputs into a unified interaction state for context-aware behaviour.</li>
+  </ul>
+
+  <h3>13.6 Conclusion</h3>
+  <p>The <code>voice/</code> package represents a complete, production-ready voice interaction subsystem for the Rope robot. Its modular pipeline architecture separates concerns cleanly, enabling independent development and testing of each stage. Bilingual support (Arabic/English) is built into every level from wake words to TTS voices. The threaded producer-consumer design maintains real-time audio capture while offloading heavy computation. The animated face provides intuitive visual feedback that enhances the user's sense of interacting with a sentient agent.</p>
+
+  <p>With end-to-end latency of 1.5–3.0 seconds, graceful degradation under component failures, and a clear path for future enhancements, the system is well-suited for both academic demonstration and practical deployment in human-robot interaction scenarios.</p>
+</section>
+
+</main>
+
+<a href="#" class="back-to-top" id="backToTop">↑ Top</a>
+
+<script>
+  window.addEventListener('scroll', function() {
+    var btn = document.getElementById('backToTop');
+    if (window.scrollY > 400) { btn.style.display = 'block'; }
+    else { btn.style.display = 'none'; }
+  });
+</script>
+
+</body>
+</html>

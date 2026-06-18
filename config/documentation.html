@@ -1,0 +1,664 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Configuration System Documentation — Ropo Educational Robot</title>
+<style>
+  @page { margin: 2cm; size: A4; }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Segoe UI', 'Roboto', Arial, sans-serif;
+    font-size: 11pt; line-height: 1.6; color: #1a1a1a;
+    max-width: 210mm; margin: 0 auto; padding: 20pt 30pt;
+    background: #fff;
+  }
+  h1 { font-size: 22pt; margin-top: 10pt; margin-bottom: 4pt; color: #0b3d6b; }
+  h2 { font-size: 16pt; margin-top: 28pt; margin-bottom: 10pt; color: #0b3d6b; border-bottom: 2px solid #0b3d6b; padding-bottom: 4pt; }
+  h3 { font-size: 13pt; margin-top: 20pt; margin-bottom: 8pt; color: #1a5276; }
+  h4 { font-size: 11.5pt; margin-top: 14pt; margin-bottom: 6pt; color: #2c3e50; }
+  p, li { margin-bottom: 6pt; text-align: justify; }
+  ul, ol { margin-left: 20pt; margin-bottom: 10pt; }
+  table { width: 100%; border-collapse: collapse; margin: 12pt 0; font-size: 10pt; }
+  th, td { border: 1px solid #999; padding: 6pt 8pt; text-align: left; vertical-align: top; }
+  th { background: #0b3d6b; color: #fff; font-weight: 600; }
+  tr:nth-child(even) td { background: #f2f6fa; }
+  code { font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace; font-size: 9.5pt; background: #eef3f8; padding: 1pt 5pt; border-radius: 3px; }
+  pre { font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace; font-size: 9pt; background: #f5f7fa; border: 1px solid #d0d7de; border-radius: 5px; padding: 10pt; overflow-x: auto; margin: 10pt 0; line-height: 1.4; }
+  .subtitle { font-size: 13pt; color: #4a6a85; margin-bottom: 20pt; }
+  .cover { text-align: center; padding: 60pt 0 30pt 0; }
+  .cover h1 { font-size: 28pt; border: none; }
+  .cover .subtitle { font-size: 16pt; }
+  .cover .meta { margin-top: 30pt; color: #666; font-size: 10pt; }
+  .screenshot-placeholder {
+    border: 2px dashed #0b3d6b; background: #eaf2f8; border-radius: 8px;
+    padding: 16pt; margin: 14pt 0; text-align: center;
+  }
+  .screenshot-placeholder strong { display: block; font-size: 12pt; color: #0b3d6b; margin-bottom: 4pt; }
+  .screenshot-placeholder .desc { font-size: 10pt; color: #2c3e50; }
+  .arch-diagram { text-align: center; margin: 14pt 0; }
+  .arch-diagram pre { display: inline-block; text-align: left; font-size: 9pt; }
+  .badge { display: inline-block; background: #0b3d6b; color: #fff; font-size: 8pt; padding: 2pt 7pt; border-radius: 10px; margin-right: 4pt; }
+  .badge-green { background: #1a7a3a; }
+  .badge-orange { background: #b9630b; }
+  .footnote { font-size: 9pt; color: #777; border-top: 1px solid #ccc; margin-top: 30pt; padding-top: 10pt; }
+  @media print {
+    body { padding: 0; }
+    h2 { page-break-after: avoid; }
+    h3 { page-break-after: avoid; }
+    .screenshot-placeholder { page-break-inside: avoid; }
+    pre { page-break-inside: avoid; }
+    table { page-break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+
+<div class="cover">
+  <h1>Configuration System Documentation</h1>
+  <div class="subtitle">Ropo Educational Robot</div>
+  <div class="meta">
+    Graduation Project — Department of Computer Engineering<br>
+    Document Version 1.0
+  </div>
+</div>
+
+<!-- ===== TOC ===== -->
+<h2 style="border:none; margin-top:10pt;">Table of Contents</h2>
+<ol style="margin-bottom:20pt;">
+  <li>Folder Purpose &amp; Architectural Role</li>
+  <li>Architecture Overview &amp; Module Relationships</li>
+  <li>Files Overview</li>
+  <li>Detailed File Explanations</li>
+  <li>Code Walkthrough with Screenshot Placeholders</li>
+  <li>Runtime Sequence Flow</li>
+  <li>Folder Integration (Vision, Voice, LLM, Hardware)</li>
+  <li>Technical Notes (Libraries, Patterns, Performance)</li>
+  <li>Academic Explanation &amp; Graduation Project Notes</li>
+</ol>
+
+<!-- ===== 1. FOLDER PURPOSE ===== -->
+<h2>1. Folder Purpose &amp; Architectural Role</h2>
+
+<p>
+The <code>config/</code> package serves as the <strong>central configuration nucleus</strong> of the Ropo educational robot. In every complex robotic system, configuration management is a cross-cutting concern — nearly every module (camera, voice recognition, gesture detection, LLM inference, text-to-speech, vision pipeline) depends on tunable parameters that must be consistent, validated, and centrally administered.
+</p>
+
+<p>
+The <code>config/</code> folder solves the following problems:
+</p>
+<ul>
+  <li><strong>Single Source of Truth:</strong> Eliminates hard-coded parameters scattered across the codebase. All tunable values — camera resolution, ASR sample rate, VAD thresholds, LLM API keys, TTS engine selection — are defined in one place.</li>
+  <li><strong>Environment-Based Configuration:</strong> Uses <code>.env</code> files via <code>python-dotenv</code> so that deployment-specific settings (API keys, platform-specific resolutions) never leak into version control.</li>
+  <li><strong>Platform Adaptation:</strong> Automatically detects whether the robot is running on a Raspberry Pi or a desktop machine and adjusts camera parameters, threading policies, and vision profiles accordingly.</li>
+  <li><strong>Runtime Diagnostics &amp; Health:</strong> Provides startup diagnostics (microphone, speaker, camera, model files, disk/RAM, internet connectivity), a Watchdog component for liveness monitoring, and a SystemMonitor for FPS/temperature tracking.</li>
+  <li><strong>Immutable, Type-Safe Settings:</strong> Uses Python <code>@dataclass(frozen=True)</code> to produce immutable settings objects, preventing accidental mutation at runtime and enabling safe concurrent access.</li>
+</ul>
+
+<!-- ===== 2. ARCHITECTURE OVERVIEW ===== -->
+<h2>2. Architecture Overview &amp; Module Relationships</h2>
+
+<h3>2.1 Internal Architecture</h3>
+<p>
+The configuration system is organised as a flat package of two modules — <code>settings.py</code> and <code>diagnostics.py</code> — that together export a clean API consumed by all higher-level subsystems.
+</p>
+
+<div class="arch-diagram">
+<pre>
+┌─────────────────────────────────────────────────────────┐
+│                   config/ Package                       │
+│                                                         │
+│   ┌──────────────────────┐   ┌──────────────────────┐  │
+│   │     settings.py      │   │   diagnostics.py     │  │
+│   │                      │   │                      │  │
+│   │  GeneralSettings     │   │  get_cpu_temperature │  │
+│   │  PathSettings        │   │  run_startup_diag()  │  │
+│   │  CameraSettings      │   │  print_diagnostics() │  │
+│   │  GestureSettings     │   │  periodic_gc()       │  │
+│   │  ASRSettings         │   │  Watchdog            │  │
+│   │  VADSettings         │   │  SystemMonitor       │  │
+│   │  LLMSettings         │   │                      │  │
+│   │  TTSSettings         │   │  ── depends on ──►   │  │
+│   │  VisionSettings      │   │     settings.py      │  │
+│   │  Settings (composite)│   │                      │  │
+│   │  get_settings()      │   │                      │  │
+│   │  configure_platform()│   │                      │  │
+│   │  profile_module_conf()│  │                      │  │
+│   │  detect_preset()     │   │                      │  │
+│   └──────────────────────┘   └──────────────────────┘  │
+│                                                         │
+│   Output: Immutable Settings singleton                  │
+│   Consumed by: vision/, voice/, llm/, hardware/         │
+└─────────────────────────────────────────────────────────┘
+</pre>
+</div>
+
+<h3>2.2 Data Flow</h3>
+
+<div class="arch-diagram">
+<pre>
+    .env file
+       │
+       ▼
+ settings.py ──load_dotenv()──► dataclass fields
+       │                          │
+       │                          ▼
+       │              get_settings() ──► frozen Settings
+       │                                   │
+       ├────────────────────────────────────┤
+       ▼                                    ▼
+ diagnostics.py                     vision / voice / llm / hardware
+       │
+       ├──► startup diagnostics
+       ├──► Watchdog (component liveness)
+       └──► SystemMonitor (FPS, temp)
+</pre>
+</div>
+
+<p>
+Settings flow is strictly unidirectional: environment variables → <code>dataclass</code> constructors → composite <code>Settings</code> object → consumed by subsystems. No subsystem writes back to settings. This guarantees referential transparency and simplifies debugging.
+</p>
+
+<!-- ===== 3. FILES OVERVIEW ===== -->
+<h2>3. Files Overview</h2>
+
+<table>
+  <thead>
+    <tr><th>File</th><th>Size</th><th>Purpose</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>__init__.py</code></td>
+      <td>0 lines</td>
+      <td>Marks <code>config/</code> as a Python package. Empty — all exports are accessed via explicit <code>from config.settings import ...</code> or <code>from config.diagnostics import ...</code>.</td>
+    </tr>
+    <tr>
+      <td><code>settings.py</code></td>
+      <td>232 lines</td>
+      <td>Defines all configuration dataclasses (<code>GeneralSettings</code>, <code>CameraSettings</code>, <code>GestureSettings</code>, <code>ASRSettings</code>, <code>VADSettings</code>, <code>LLMSettings</code>, <code>TTSSettings</code>, <code>VisionSettings</code>, and the composite <code>Settings</code>). Contains platform detection, vision profiles, and the <code>get_settings()</code> singleton factory.</td>
+    </tr>
+    <tr>
+      <td><code>diagnostics.py</code></td>
+      <td>203 lines</td>
+      <td>Provides runtime health infrastructure: CPU temperature polling, startup diagnostics checklist, periodic garbage collection, a <code>Watchdog</code> for component liveness, and <code>SystemMonitor</code> for FPS aggregation and overlay generation.</td>
+    </tr>
+  </tbody>
+</table>
+
+<!-- ===== 4. DETAILED FILE EXPLANATIONS ===== -->
+<h2>4. Detailed File Explanations</h2>
+
+<h3>4.1 <code>__init__.py</code></h3>
+<p>
+This file is intentionally empty. Python requires an <code>__init__.py</code> to treat a directory as an importable package. All public symbols are accessed through explicit submodule imports (e.g., <code>from config.settings import get_settings</code>), which keeps the package namespace clean and avoids circular import issues.
+</p>
+
+<h3>4.2 <code>settings.py</code></h3>
+
+<h4>Purpose</h4>
+<p>
+<code>settings.py</code> is the single source of truth for all configurable parameters in the Ropo robot. It loads environment variables via <code>python-dotenv</code>, detects the underlying hardware platform (Raspberry Pi vs. desktop), and exposes immutable dataclass objects that every other module imports.
+</p>
+
+<h4>Main Classes</h4>
+
+<table>
+  <thead>
+    <tr><th>Class</th><th>Frozen?</th><th>Fields (key examples)</th><th>Purpose</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>GeneralSettings</code></td>
+      <td>Yes</td>
+      <td><code>log_level</code>, <code>student_name</code>, <code>default_session_language</code></td>
+      <td>Top-level application behaviour: logging verbosity, user identity, session language (ar/en).</td>
+    </tr>
+    <tr>
+      <td><code>PathSettings</code></td>
+      <td>Yes</td>
+      <td><code>project_root</code>, <code>models_dir</code>, <code>db_path</code>, <code>tts_temp_dir</code>, face model file names &amp; URLs</td>
+      <td>Centralises all filesystem paths — project root, model checkpoints, SQLite database, TTS audio cache, and Caffe face detection model URLs.</td>
+    </tr>
+    <tr>
+      <td><code>CameraSettings</code></td>
+      <td>Yes</td>
+      <td><code>width</code>, <code>height</code>, <code>fps</code>, <code>index</code>, <code>format</code>, <code>buffer_size</code>, <code>face_threshold</code>, <code>face_frame_skip</code>, <code>face_scale_factor</code>, <code>camera_fallback_indices</code></td>
+      <td>Camera pipeline tuning. Resolution and FPS differ by platform (RPi: 640×480 @15; Desktop: 1280×720 @30). Face detection parameters and fallback camera indices are defined here.</td>
+    </tr>
+    <tr>
+      <td><code>GestureSettings</code></td>
+      <td>Yes</td>
+      <td><code>buffer_size</code>, <code>stability_frames</code>, <code>max_hands</code>, <code>min_detection_confidence</code>, HSV/YCbCr skin ranges, finger geometry thresholds</td>
+      <td>Controls the hand-gesture recognition pipeline: smoothing buffer depth, detection confidence, colour-space skin segmentation bounds (HSV + YCrCb), and finger-angle heuristics.</td>
+    </tr>
+    <tr>
+      <td><code>ASRSettings</code></td>
+      <td>Yes</td>
+      <td><code>provider</code>, <code>sample_rate</code>, <code>language_mode</code>, <code>default_record_duration_seconds</code>, <code>supported_languages</code></td>
+      <td>Automatic Speech Recognition configuration. Supports Google and (by extension) other providers. Bilingual language map (en-US / ar-EG).</td>
+    </tr>
+    <tr>
+      <td><code>VADSettings</code></td>
+      <td>Yes</td>
+      <td><code>sample_rate</code>, <code>initial_threshold</code>, <code>chunk_duration_ms</code>, <code>pre_speech_buffer_seconds</code>, <code>min_speech_seconds</code>, <code>silence_timeout_seconds</code>, Silero VAD model repo/name</td>
+      <td>Voice Activity Detection via Silero VAD. All temporal parameters (pre-roll, min speech, silence timeout) are exposed for tuning.</td>
+    </tr>
+    <tr>
+      <td><code>LLMSettings</code></td>
+      <td>Yes</td>
+      <td><code>provider</code>, <code>openrouter_api_key</code>, <code>openrouter_model</code>, <code>request_timeout_seconds</code>, <code>sliding_window_size</code>, system prompts (ar/en)</td>
+      <td>LLM integration via OpenRouter. Configures model selection, API key, timeouts, conversation sliding-window size, and bilingual system prompts.</td>
+    </tr>
+    <tr>
+      <td><code>TTSSettings</code></td>
+      <td>Yes</td>
+      <td><code>engine</code>, <code>audio_temp_dir</code>, <code>audio_filename_template</code>, <code>pygame_poll_interval_seconds</code></td>
+      <td>Text-to-Speech engine selection (edge-tts), temporary audio file naming, and pygame playback polling interval.</td>
+    </tr>
+    <tr>
+      <td><code>VisionSettings</code></td>
+      <td>Yes</td>
+      <td><code>profile</code> (VisionProfile enum), <code>enable_metrics_overlay</code>, <code>adaptive_shedding</code>, <code>target_frame_interval</code>, <code>max_frame_skip</code>, thermal throttle/restore thresholds</td>
+      <td>Vision pipeline profile selection (MINIMAL / BALANCED / FULL), frame-skipping for thermal management, and performance overlay toggle.</td>
+    </tr>
+    <tr>
+      <td><code>Settings</code> (composite)</td>
+      <td>Yes</td>
+      <td>One reference to each settings group above</td>
+      <td>Aggregate root. Provides a single entry point (<code>settings.general</code>, <code>settings.camera</code>, ...) for the entire configuration tree.</td>
+    </tr>
+  </tbody>
+</table>
+
+<h4>Enumerations &amp; Platform Detection</h4>
+<ul>
+  <li><strong><code>VisionProfile</code></strong> — <code>MINIMAL</code>, <code>BALANCED</code>, <code>FULL</code>. Controls which vision sub-modules (obstacle detection, emotion recognition, object detection, scene classification) are enabled.</li>
+  <li><strong><code>PlatformPreset</code></strong> — <code>RASPBERRY_PI_4</code>, <code>RASPBERRY_PI_5</code>, <code>DESKTOP_DEBUG</code>. Determined by <code>detect_preset()</code> which checks <code>/proc/device-tree/model</code> and the presence of <code>/etc/rpi-issue</code>.</li>
+</ul>
+
+<h4>Main Functions</h4>
+<table>
+  <thead>
+    <tr><th>Function</th><th>Returns</th><th>Description</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>get_settings()</code></td>
+      <td><code>Settings</code></td>
+      <td>Factory function that constructs and returns the composite <code>Settings</code> object. Calling it multiple times returns distinct frozen instances — consumers are expected to call it once and cache the result.</td>
+    </tr>
+    <tr>
+      <td><code>configure_platform()</code></td>
+      <td><code>None</code></td>
+      <td>Applies platform-specific runtime tuning: on Raspberry Pi, limits OpenCV and PyTorch thread counts to 1 to avoid contention on the limited CPU.</td>
+    </tr>
+    <tr>
+      <td><code>detect_preset()</code></td>
+      <td><code>PlatformPreset</code></td>
+      <td>Reads <code>/proc/device-tree/model</code> to distinguish Raspberry Pi 4 vs. 5. Falls back to <code>DESKTOP_DEBUG</code> when not running on a Pi.</td>
+    </tr>
+    <tr>
+      <td><code>profile_module_config()</code></td>
+      <td><code>dict</code></td>
+      <td>Given a <code>VisionProfile</code> and <code>PlatformPreset</code>, returns a dictionary of boolean flags (<code>enable_objects</code>, <code>enable_scene</code>, <code>enable_obstacle</code>, <code>enable_emotion</code>) that controls which vision sub-modules are loaded at runtime.</td>
+    </tr>
+  </tbody>
+</table>
+
+<h4>Execution Flow</h4>
+<ol>
+  <li>Module import triggers <code>load_dotenv()</code> which reads <code>.env</code> from the project root.</li>
+  <li><code>IS_RASPBERRY_PI</code> flag is set via filesystem checks (<code>/etc/rpi-issue</code>, <code>/proc/device-tree/model</code>).</li>
+  <li>Each dataclass constructor reads environment variables with <code>os.getenv()</code>, applying sensible defaults.</li>
+  <li>Consumer code calls <code>get_settings()</code> to obtain a fully-populated, immutable <code>Settings</code> instance.</li>
+  <li>At startup, <code>configure_platform()</code> adjusts thread affinity.</li>
+</ol>
+
+<h4>Inputs / Outputs / Dependencies</h4>
+<ul>
+  <li><strong>Inputs:</strong> Environment variables (<code>.env</code> file or system environment).</li>
+  <li><strong>Outputs:</strong> An immutable <code>Settings</code> dataclass tree.</li>
+  <li><strong>Dependencies:</strong> <code>python-dotenv</code>, <code>os</code>, <code>tempfile</code>, <code>pathlib</code>, <code>dataclasses</code>, <code>typing</code>, <code>enum</code>.</li>
+</ul>
+
+<h3>4.3 <code>diagnostics.py</code></h3>
+
+<h4>Purpose</h4>
+<p>
+<code>diagnostics.py</code> provides runtime health monitoring for the Ropo robot. It ensures that hardware components are responsive, system resources (disk, memory) are sufficient, and long-running threads do not hang. It also exposes performance metrics for the vision pipeline.
+</p>
+
+<h4>Main Classes</h4>
+<table>
+  <thead>
+    <tr><th>Class</th><th>Key Methods</th><th>Purpose</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>Watchdog</code></td>
+      <td><code>register()</code>, <code>ping()</code>, <code>start()</code>, <code>stop()</code></td>
+      <td>A thread-based liveness monitor. Components register with a name and timeout; they must call <code>ping()</code> periodically. If a component fails to ping within its timeout, a warning is logged and an optional callback is invoked. This prevents the robot from getting stuck on a stalled camera or hung network request.</td>
+    </tr>
+    <tr>
+      <td><code>SystemMonitor</code></td>
+      <td><code>record_fps()</code>, <code>get_average_fps()</code>, <code>get_overlay_text()</code></td>
+      <td>Collects FPS samples from the vision loop (ring buffer of 100 entries), computes a running average, and produces a formatted overlay string (e.g., <code>"FPS: 28.3 | Temp: 62C"</code>). The overlay is drawn onto the video feed when metrics are enabled.</td>
+    </tr>
+  </tbody>
+</table>
+
+<h4>Main Functions</h4>
+<table>
+  <thead>
+    <tr><th>Function</th><th>Returns</th><th>Description</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>get_cpu_temperature()</code></td>
+      <td><code>Optional[float]</code></td>
+      <td>Reads <code>/sys/class/thermal/thermal_zone0/temp</code> on Raspberry Pi and returns degrees Celsius. Returns <code>None</code> on non-Pi platforms.</td>
+    </tr>
+    <tr>
+      <td><code>run_startup_diagnostics()</code></td>
+      <td><code>Dict[str, str]</code></td>
+      <td>Performs a comprehensive hardware and software readiness check: microphone accessibility, speaker output, camera availability, presence of face / YOLO / emotion model files, disk free space, available RAM, and internet connectivity to 8.8.8.8:53.</td>
+    </tr>
+    <tr>
+      <td><code>print_diagnostics()</code></td>
+      <td><code>None</code></td>
+      <td>Formats and prints the diagnostics dictionary to the console with <code>[OK]</code> / <code>[!!]</code> icons.</td>
+    </tr>
+    <tr>
+      <td><code>periodic_gc()</code></td>
+      <td><code>None</code></td>
+      <td>Runs Python garbage collection every 60 seconds (or on demand with <code>force=True</code>). Prevents memory leaks in long-running loops.</td>
+    </tr>
+  </tbody>
+</table>
+
+<h4>Execution Flow</h4>
+<ol>
+  <li>On robot startup, <code>run_startup_diagnostics()</code> is called. Results are printed via <code>print_diagnostics()</code>.</li>
+  <li>The <code>Watchdog</code> is instantiated and started as a daemon thread. Each component (camera, ASR, LLM, TTS) registers with its expected timeout.</li>
+  <li>During the main loop, vision code calls <code>SystemMonitor.record_fps()</code> each frame. Components call <code>watchdog.ping()</code> after each successful operation.</li>
+  <li><code>periodic_gc()</code> is invoked at the end of each main-loop iteration to keep memory pressure low.</li>
+</ol>
+
+<h4>Inputs / Outputs / Dependencies</h4>
+<ul>
+  <li><strong>Inputs:</strong> System files (<code>/sys/class/thermal/...</code>), hardware interfaces (mic, speaker, camera), filesystem (model file existence, disk space), network (socket check to 8.8.8.8:53).</li>
+  <li><strong>Outputs:</strong> Console diagnostic report, log entries, overlay string, Watchdog alerts.</li>
+  <li><strong>Dependencies:</strong> <code>config.settings</code>, <code>gc</code>, <code>logging</code>, <code>os</code>, <code>shutil</code>, <code>socket</code>, <code>threading</code>, <code>time</code>, <code>pathlib</code>, <code>typing</code>.</li>
+</ul>
+
+<!-- ===== 5. CODE WALKTHROUGH ===== -->
+<h2>5. Code Walkthrough with Screenshot Placeholders</h2>
+
+<p>
+This section walks through the key code paths in <code>settings.py</code> and <code>diagnostics.py</code> from an educational perspective, highlighting design decisions, idiomatic Python usage, and graduation-project-level engineering.
+</p>
+
+<div class="screenshot-placeholder">
+  <strong>[SCREENSHOT_PLACEHOLDER_01]</strong>
+  <div class="desc">
+    <strong>Description:</strong> Project structure — the <code>config/</code> package inside the full Ropo robot repository.<br>
+    <strong>Purpose:</strong> Shows the folder containing <code>__init__.py</code>, <code>settings.py</code>, <code>diagnostics.py</code> alongside sibling packages (vision/, voice/, llm/, hardware/, data/, models/). Demonstrates the modular monolith layout.
+  </div>
+</div>
+
+<div class="screenshot-placeholder">
+  <strong>[SCREENSHOT_PLACEHOLDER_02]</strong>
+  <div class="desc">
+    <strong>Description:</strong> The <code>load_dotenv()</code> call at the top of <code>settings.py</code> and the <code>IS_RASPBERRY_PI</code> detection logic.<br>
+    <strong>Purpose:</strong> Illustrates how environment variables are loaded before any dataclass is instantiated, and how platform detection is performed once at import time using filesystem probes.
+  </div>
+</div>
+
+<div class="screenshot-placeholder">
+  <strong>[SCREENSHOT_PLACEHOLDER_03]</strong>
+  <div class="desc">
+    <strong>Description:</strong> The <code>CameraSettings</code> dataclass showing platform-conditional defaults (RPi vs Desktop).<br>
+    <strong>Purpose:</strong> Demonstrates the use of the <code>IS_RASPBERRY_PI</code> flag to select different default resolutions and frame rates. Also shows <code>field(default_factory=...)</code> for mutable defaults like lists.
+  </div>
+</div>
+
+<div class="screenshot-placeholder">
+  <strong>[SCREENSHOT_PLACEHOLDER_04]</strong>
+  <div class="desc">
+    <strong>Description:</strong> The <code>GestureSettings</code> class — HSV and YCrCb skin-colour ranges and finger-geometry thresholds.<br>
+    <strong>Purpose:</strong> Shows how computer-vision heuristics (skin segmentation, finger angle, aspect ratio) are externalised into configuration so they can be tuned without modifying source code.
+  </div>
+</div>
+
+<div class="screenshot-placeholder">
+  <strong>[SCREENSHOT_PLACEHOLDER_05]</strong>
+  <div class="desc">
+    <strong>Description:</strong> The <code>VADSettings</code> class with Silero VAD model repository configuration.<br>
+    <strong>Purpose:</strong> Demonstrates integration of a deep-learning model (Silero VAD) via configuration. Parameters like <code>model_hub_repo</code>, <code>model_hub_name</code>, and <code>model_trust_repo</code> control how the model is loaded from Hugging Face Hub.
+  </div>
+</div>
+
+<div class="screenshot-placeholder">
+  <strong>[SCREENSHOT_PLACEHOLDER_06]</strong>
+  <div class="desc">
+    <strong>Description:</strong> The <code>LLMSettings</code> class with OpenRouter configuration and bilingual system prompts.<br>
+    <strong>Purpose:</strong> Shows how LLM provider, API key, model selection, conversation window size, and language-specific system prompts are centralised. The Arabic and English prompts are truncated in the snippet.
+  </div>
+</div>
+
+<div class="screenshot-placeholder">
+  <strong>[SCREENSHOT_PLACEHOLDER_07]</strong>
+  <div class="desc">
+    <strong>Description:</strong> The <code>VisionProfile</code> enum, <code>PlatformPreset</code> enum, <code>detect_preset()</code> function, and <code>profile_module_config()</code>.<br>
+    <strong>Purpose:</strong> Demonstrates the Strategy pattern applied to vision pipelines. The function returns a dictionary of boolean flags that dynamically enable/disable YOLO object detection, scene classification, obstacle detection, and emotion recognition based on the active profile and hardware platform.
+  </div>
+</div>
+
+<div class="screenshot-placeholder">
+  <strong>[SCREENSHOT_PLACEHOLDER_08]</strong>
+  <div class="desc">
+    <strong>Description:</strong> The composite <code>Settings</code> dataclass and the <code>get_settings()</code> factory function.<br>
+    <strong>Purpose:</strong> Shows the aggregate-root pattern where nine settings groups are composed into a single frozen dataclass. <code>get_settings()</code> acts as a factory (can be adapted to a Singleton if desired) that constructs the full tree.
+  </div>
+</div>
+
+<div class="screenshot-placeholder">
+  <strong>[SCREENSHOT_PLACEHOLDER_09]</strong>
+  <div class="desc">
+    <strong>Description:</strong> The <code>Watchdog</code> class — <code>register()</code>, <code>ping()</code>, and the background <code>_run()</code> loop.<br>
+    <strong>Purpose:</strong> Demonstrates a real-world use of <code>threading</code> for health monitoring. The watchdog sleeps 10 seconds between checks; if any component's elapsed time exceeds its timeout, a warning is logged and a user-defined stale callback fires.
+  </div>
+</div>
+
+<div class="screenshot-placeholder">
+  <strong>[SCREENSHOT_PLACEHOLDER_10]</strong>
+  <div class="desc">
+    <strong>Description:</strong> The <code>SystemMonitor</code> class — FPS ring buffer, averaging, and overlay text generation.<br>
+    <strong>Purpose:</strong> Shows a thread-safe sliding-window accumulator for performance metrics. The <code>get_overlay_text()</code> method produces a string like <code>"FPS: 28.3 | Temp: 62C"</code> that is drawn onto the camera preview.
+  </div>
+</div>
+
+<div class="screenshot-placeholder">
+  <strong>[SCREENSHOT_PLACEHOLDER_11]</strong>
+  <div class="desc">
+    <strong>Description:</strong> The <code>run_startup_diagnostics()</code> function — skeleton showing all checks performed at boot.<br>
+    <strong>Purpose:</strong> Provides a comprehensive readiness checklist: microphone, speaker, camera, model files (face detection, YOLOv8, YOLOv8-seg, emotion), disk space, RAM, internet. Each check returns <code>"ok"</code> or a descriptive error string.
+  </div>
+</div>
+
+<div class="screenshot-placeholder">
+  <strong>[SCREENSHOT_PLACEHOLDER_12]</strong>
+  <div class="desc">
+    <strong>Description:</strong> Console output of <code>print_diagnostics()</code> showing a successful startup with all <code>[OK]</code> markers.<br>
+    <strong>Purpose:</strong> Shows the user-facing diagnostic report format. Used for both development debugging and field deployment to quickly identify missing models or failed hardware.
+  </div>
+</div>
+
+<!-- ===== 6. SEQUENCE FLOW ===== -->
+<h2>6. Runtime Sequence Flow</h2>
+
+<p>The following sequence diagram shows the interaction between <code>config/</code> and the rest of the robot system during a typical startup and main-loop iteration.</p>
+
+<div class="arch-diagram">
+<pre>
+ ┌─────────┐   ┌──────────────┐   ┌───────────┐   ┌────────────┐   ┌──────────┐
+ │  main.py │   │ config/      │   │ vision/   │   │ voice/     │   │ llm/     │
+ └────┬─────┘   └──────┬───────┘   └─────┬─────┘   └─────┬──────┘   └────┬─────┘
+      │                │                  │               │               │
+      │ get_settings() │                  │               │               │
+      │───────────────►│                  │               │               │
+      │◄───────────────│                  │               │               │
+      │  Settings obj  │                  │               │               │
+      │                │                  │               │               │
+      │ run_startup_diag()               │               │               │
+      │───────────────►│                  │               │               │
+      │◄───────────────│                  │               │               │
+      │  {"camera":"ok",...}             │               │               │
+      │                │                  │               │               │
+      │ configure_platform()             │               │               │
+      │───────────────►│                  │               │               │
+      │                │                  │               │               │
+      │ Watchdog.start()                  │               │               │
+      │─────────────────────────────────────────────────────────────────►│
+      │                │                  │               │               │
+      │   === MAIN LOOP ============     │               │               │
+      │                │                  │               │               │
+      │                │   camera.read()  │               │               │
+      │                │◄─────────────────│               │               │
+      │                │   watchdog.ping("camera")        │               │
+      │                │─────────────────────────────────►│               │
+      │                │                  │               │               │
+      │                │                  │  asr.listen()  │               │
+      │                │                  │◄──────────────│               │
+      │                │                  │               │               │
+      │                │                  │               │  llm.ask()    │
+      │                │                  │               │──────────────►│
+      │                │                  │               │◄──────────────│
+      │                │                  │               │  response     │
+      │                │   monitor.record_fps(fps)        │               │
+      │                │◄─────────────────│               │               │
+      │                │   periodic_gc()  │               │               │
+      │                │◄─────────────────│               │               │
+</pre>
+</div>
+
+<!-- ===== 7. FOLDER INTEGRATION ===== -->
+<h2>7. Folder Integration (Vision, Voice, LLM, Hardware)</h2>
+
+<h3>7.1 Integration with Vision System</h3>
+<p>
+The vision pipeline imports <code>get_settings()</code> to read <code>CameraSettings</code> (resolution, FPS, face detection parameters), <code>VisionSettings</code> (profile, adaptive shedding, thermal thresholds), and <code>GestureSettings</code> (skin colour ranges, finger thresholds). The <code>profile_module_config()</code> function is called at vision initialisation to selectively load sub-modules. The <code>SystemMonitor</code> receives per-frame FPS data and the <code>Watchdog</code> monitors camera liveness.
+</p>
+
+<h3>7.2 Integration with Voice / ASR System</h3>
+<p>
+The voice subsystem reads <code>ASRSettings</code> (provider, sample rate, language mode, duration), <code>VADSettings</code> (thresholds, Silero model config), and <code>TTSSettings</code> (engine, temporary audio paths). The watchdog registers an ASR component and expects pings during audio capture.
+</p>
+
+<h3>7.3 Integration with LLM System</h3>
+<p>
+The LLM module uses <code>LLMSettings</code> for API key, model name, timeouts, sliding-window size, and system prompts. The summarization and request timeouts from settings prevent runaway HTTP requests.
+</p>
+
+<h3>7.4 Integration with Hardware Abstraction</h3>
+<p>
+<code>configure_platform()</code> sets OpenCV and PyTorch thread counts on Raspberry Pi. <code>PathSettings</code> provides model file paths to hardware-level inference engines. The diagnostics module checks physical hardware availability (camera, microphone, speaker) and reports failures before the robot begins operation.
+</p>
+
+<!-- ===== 8. TECHNICAL NOTES ===== -->
+<h2>8. Technical Notes</h2>
+
+<h3>8.1 Libraries &amp; Frameworks</h3>
+<table>
+  <thead>
+    <tr><th>Library</th><th>Role</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>python-dotenv</code></td><td>Loads environment variables from <code>.env</code> file into <code>os.environ</code> before settings are constructed.</td></tr>
+    <tr><td><code>dataclasses</code> (stdlib)</td><td>Provides <code>@dataclass(frozen=True)</code> for immutable configuration objects with minimal boilerplate.</td></tr>
+    <tr><td><code>pathlib</code> (stdlib)</td><td>Cross-platform filesystem path handling for project root, models, database, and TTS temp directory.</td></tr>
+    <tr><td><code>typing</code> (stdlib)</td><td>Type hints (<code>Dict</code>, <code>List</code>, <code>Tuple</code>, <code>Optional</code>) for static analysis and IDE support.</td></tr>
+    <tr><td><code>enum</code> (stdlib)</td><td>Defines <code>VisionProfile</code> and <code>PlatformPreset</code> enumerations.</td></tr>
+    <tr><td><code>threading</code> (stdlib)</td><td>Background thread for Watchdog monitoring loop.</td></tr>
+    <tr><td><code>gc</code> (stdlib)</td><td>Manual garbage collection trigger for long-running loops.</td></tr>
+    <tr><td><code>logging</code> (stdlib)</td><td>Structured logging for diagnostics, watchdog events, and GC activity.</td></tr>
+  </tbody>
+</table>
+
+<h3>8.2 Design Patterns</h3>
+<ul>
+  <li><strong>Singleton (via factory):</strong> <code>get_settings()</code> acts as a factory function. While the current implementation returns a new frozen instance on each call, the pattern is intentionally designed so that a cache (e.g., <code>functools.lru_cache</code>) can be added without changing the call site. This gives the flexibility of a Singleton without the testability drawbacks of a global.</li>
+  <li><strong>Frozen Dataclass / Immutability:</strong> Every settings class uses <code>@dataclass(frozen=True)</code>. This guarantees that once a <code>Settings</code> object is created, its values cannot change. This prevents subtle bugs where one module accidentally mutates shared configuration, and it makes the configuration safe for concurrent access across threads.</li>
+  <li><strong>Strategy Pattern (Vision Profiles):</strong> <code>VisionProfile</code> enum combined with <code>profile_module_config()</code> implements the Strategy pattern. Each profile (MINIMAL, BALANCED, FULL) defines a different set of enabled vision modules, allowing the robot to scale its computational load based on platform capability and power budget.</li>
+  <li><strong>Composite Pattern:</strong> The top-level <code>Settings</code> dataclass composes nine sub-settings groups. Consumers access the full configuration tree via a single object, simplifying dependency injection.</li>
+  <li><strong>Observer (via Watchdog callbacks):</strong> The Watchdog accepts optional <code>on_stale</code> callbacks that fire when a component times out. This is a lightweight observer pattern for liveness monitoring.</li>
+</ul>
+
+<h3>8.3 Performance Considerations</h3>
+<ul>
+  <li><strong>Platform-Adaptive Defaults:</strong> <code>CameraSettings</code> uses different resolutions and FPS on Raspberry Pi (640×480 @15) vs. desktop (1280×720 @30), avoiding wasted CPU/GPU cycles on constrained hardware.</li>
+  <li><strong>Adaptive Frame Shedding:</strong> <code>VisionSettings.target_frame_interval</code> and <code>max_frame_skip</code> allow the vision pipeline to shed frames when the system is overloaded, maintaining responsiveness.</li>
+  <li><strong>Thermal Throttling:</strong> The <code>VisionSettings</code> thermal thresholds (75°C throttle, 65°C restore) are monitored by the vision loop to reduce frame processing when the CPU is overheating, protecting the Raspberry Pi from thermal shutdown.</li>
+  <li><strong>Thread Safety:</strong> All settings are immutable (<code>frozen=True</code>), eliminating locking overhead on reads. The <code>Watchdog</code> and <code>SystemMonitor</code> use <code>threading.Lock</code> for their mutable internal state (ping timestamps, FPS ring buffer).</li>
+  <li><strong>Periodic GC:</strong> <code>periodic_gc()</code> runs every 60 seconds to collect cyclic garbage, which is common in object-detection pipelines that create and discard tensors each frame.</li>
+</ul>
+
+<!-- ===== 9. ACADEMIC EXPLANATION ===== -->
+<h2>9. Academic Explanation &amp; Graduation Project Notes</h2>
+
+<h3>9.1 Design Rationale</h3>
+<p>
+The configuration system was designed with the following principles, derived from established software engineering practices:
+</p>
+<ul>
+  <li><strong>Separation of Concerns:</strong> Configuration is a distinct cross-cutting concern. Isolating it into its own package (<code>config/</code>) means that changes to camera resolution, ASR provider, or VAD thresholds do not require changes to the business logic in <code>vision/</code>, <code>voice/</code>, or <code>llm/</code> packages.</li>
+  <li><strong>Convention over Configuration:</strong> Sensible defaults are provided for every parameter (e.g., <code>ROBOT_CAM_WIDTH="640"</code> on RPi). Only values that differ from defaults need to be specified in <code>.env</code>.</li>
+  <li><strong>Fail Fast:</strong> Startup diagnostics run <em>before</em> the main loop begins, ensuring that missing models, disconnected cameras, or insufficient disk space are reported immediately rather than causing mysterious runtime failures.</li>
+  <li><strong>Platform Awareness:</strong> Rather than requiring manual platform selection, the system automatically detects the hardware (Raspberry Pi vs. desktop) and adjusts defaults accordingly. This reduces deployment friction.</li>
+</ul>
+
+<h3>9.2 Advantages</h3>
+<ul>
+  <li><strong>Testability:</strong> Frozen dataclasses are easy to construct in unit tests. The factory pattern allows injecting mock settings without mocking environment variables.</li>
+  <li><strong>Type Safety:</strong> Every configuration value has a declared Python type. Mismatches (e.g., passing a string where a float is expected) are caught at construction time rather than at runtime.</li>
+  <li><strong>Discoverability:</strong> All configurable parameters are listed in one file (<code>settings.py</code>). A developer or system integrator can open this single file to understand every tunable aspect of the robot.</li>
+  <li><strong>Security:</strong> API keys are loaded from environment variables / <code>.env</code> file, which can be excluded from version control via <code>.gitignore</code>. No secrets are hard-coded.</li>
+</ul>
+
+<h3>9.3 Scalability</h3>
+<p>
+While the current system serves a single-robot deployment, the architecture scales to multi-robot fleets:
+</p>
+<ul>
+  <li>Environment-specific <code>.env</code> files can be distributed per robot (e.g., <code>.env.robot1</code>, <code>.env.robot2</code>).</li>
+  <li>The <code>Settings</code> object could be serialized to JSON/YAML for remote monitoring or centralised configuration management.</li>
+  <li>New settings groups (e.g., <code>NavigationSettings</code>, <code>AudioSettings</code>) can be added by creating a new frozen dataclass and adding a field to the composite <code>Settings</code> — no structural changes required.</li>
+</ul>
+
+<h3>9.4 Reliability &amp; Robustness</h3>
+<ul>
+  <li><strong>Watchdog:</strong> Prevents the robot from hanging indefinitely on a frozen component. If a camera stops producing frames, the watchdog fires a callback that can trigger a camera reset or graceful degradation.</li>
+  <li><strong>Startup Diagnostics:</strong> Catches configuration errors early. If a model file is missing, the robot can download it automatically or report the exact path required.</li>
+  <li><strong>Thermal Management:</strong> Vision pipeline can reduce its workload when CPU temperature exceeds 75°C, preventing thermal throttling-induced latency spikes or shutdowns.</li>
+  <li><strong>Fallback Camera Indices:</strong> <code>camera_fallback_indices = [0, 1, 2]</code> allows the camera module to try alternate device indices if the primary camera fails to open.</li>
+</ul>
+
+<h3>9.5 Future Improvements</h3>
+<ul>
+  <li><strong>Dynamic Reloading:</strong> Add a file watcher that detects <code>.env</code> changes and rebuilds the <code>Settings</code> object at runtime without restarting the robot.</li>
+  <li><strong>Configuration UI:</strong> A web-based or TUI dashboard that allows non-technical users to adjust parameters (e.g., voice sensitivity, gesture thresholds) and persist them to <code>.env</code>.</li>
+  <li><strong>Remote Monitoring:</strong> Expose <code>SystemMonitor</code> metrics and <code>Watchdog</code> status via a REST API or MQTT for fleet observability.</li>
+  <li><strong>Validation &amp; Schema:</strong> Integrate a schema validator (e.g., Pydantic or JSON Schema) to enforce constraints (e.g., <code>fps &gt; 0</code>, <code>resolution &lt; 4096</code>, <code>threshold in [0,1]</code>) beyond what Python type hints provide.</li>
+  <li><strong>A/B Testing:</strong> Support configuration profiles that can be switched at runtime for experimentation (e.g., different VAD thresholds for quiet vs. noisy environments).</li>
+</ul>
+
+<h3>9.6 Contribution to the Project</h3>
+<p>
+The <code>config/</code> package, while only ~435 lines of code, is architecturally significant. It decouples the robot's algorithmic subsystems from their tunable parameters, enabling parallel development: the vision team can adjust detection thresholds without touching voice code, and the voice team can change ASR providers without understanding camera calibration. This separation of concerns — a hallmark of well-engineered systems — is what makes the Ropo robot extensible, maintainable, and production-ready.
+</p>
+
+<div class="footnote">
+  <strong>Document generated:</strong> June 2026 &mdash; Ropo Educational Robot &mdash; Graduation Project Documentation
+</div>
+
+</body>
+</html>

@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Vision System Documentation</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Inter', sans-serif; background: #f8fafc; color: #1e293b; line-height: 1.7; font-size: 14px; }
+  .container { max-width: 960px; margin: 0 auto; padding: 40px 24px; }
+  h1 { font-size: 2.4rem; font-weight: 700; letter-spacing: -0.02em; margin-bottom: 8px; color: #0f172a; }
+  h2 { font-size: 1.6rem; font-weight: 600; margin: 40px 0 16px; padding-bottom: 8px; border-bottom: 2px solid #e2e8f0; color: #0f172a; }
+  h3 { font-size: 1.2rem; font-weight: 600; margin: 28px 0 12px; color: #1e293b; }
+  h4 { font-size: 1rem; font-weight: 600; margin: 20px 0 8px; color: #334155; }
+  p, li { margin-bottom: 12px; color: #475569; }
+  ul, ol { padding-left: 24px; margin-bottom: 16px; }
+  li { margin-bottom: 6px; }
+  .subtitle { font-size: 1rem; color: #64748b; margin-bottom: 32px; }
+  code { font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; background: #f1f5f9; padding: 2px 6px; border-radius: 4px; color: #0f172a; }
+  pre { background: #1e293b; color: #e2e8f0; padding: 16px 20px; border-radius: 8px; overflow-x: auto; font-size: 0.82rem; line-height: 1.5; margin: 16px 0 24px; }
+  pre code { background: none; padding: 0; color: inherit; font-size: inherit; }
+  table { width: 100%; border-collapse: collapse; margin: 16px 0 24px; font-size: 0.9rem; }
+  th, td { border: 1px solid #e2e8f0; padding: 10px 14px; text-align: left; }
+  th { background: #f1f5f9; font-weight: 600; color: #0f172a; }
+  td { background: #fff; }
+  .screenshot { background: linear-gradient(135deg, #e2e8f0, #f1f5f9); border: 2px dashed #94a3b8; border-radius: 8px; padding: 40px 20px; text-align: center; margin: 16px 0 24px; color: #64748b; font-weight: 500; }
+  .screenshot strong { display: block; margin-bottom: 6px; color: #334155; font-size: 0.95rem; }
+  .screenshot .dim { font-size: 0.8rem; color: #94a3b8; }
+  .callout { background: #eff6ff; border-left: 4px solid #3b82f6; padding: 14px 18px; border-radius: 0 8px 8px 0; margin: 16px 0 24px; }
+  .callout.warn { background: #fef3c7; border-left-color: #f59e0b; }
+  .callout.info { background: #f0fdf4; border-left-color: #22c55e; }
+  .tag { display: inline-block; font-size: 0.72rem; font-weight: 600; padding: 2px 8px; border-radius: 12px; margin-right: 4px; }
+  .tag.purple { background: #ede9fe; color: #7c3aed; }
+  .tag.blue { background: #dbeafe; color: #2563eb; }
+  .tag.green { background: #dcfce7; color: #16a34a; }
+  .tag.orange { background: #fed7aa; color: #ea580c; }
+  .tag.red { background: #fecaca; color: #dc2626; }
+  .flow { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 8px; margin: 20px 0 28px; padding: 16px; background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; }
+  .flow-item { background: #3b82f6; color: #fff; padding: 8px 14px; border-radius: 6px; font-size: 0.82rem; font-weight: 500; }
+  .flow-arrow { color: #94a3b8; font-size: 1.1rem; }
+  .flow-item.green { background: #22c55e; }
+  .flow-item.purple { background: #8b5cf6; }
+  .flow-item.orange { background: #f59e0b; }
+  .flow-item.dark { background: #475569; }
+  @media print { body { background: #fff; font-size: 12px; } .container { max-width: 100%; padding: 20px; } pre { background: #f1f5f9 !important; color: #1e293b !important; } .screenshot { break-inside: avoid; } h2, h3 { break-after: avoid; } }
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>Vision System Documentation</h1>
+<p class="subtitle">Educational Robot — Computer Vision Pipeline &amp; Module Architecture</p>
+
+<!-- ================================================================== -->
+<h2>1. Folder Purpose</h2>
+<p>
+The <code>vision/</code> package provides the complete computer vision subsystem for an educational robotics platform. It is responsible for capturing live camera frames, processing them through a pipeline of specialised modules, and producing a structured <strong>context dictionary</strong> that is consumed by an LLM-based reasoning layer. The system supports:
+</p>
+<ul>
+  <li><strong>Face tracking</strong> — identity recognition, bounding box, landmark estimation</li>
+  <li><strong>Gesture recognition</strong> — hand pose and motion classification</li>
+  <li><strong>Emotion detection</strong> — facial-expression-based affect classification</li>
+  <li><strong>Object detection</strong> — bounding boxes and labels for known object classes</li>
+  <li><strong>Scene understanding</strong> — semantic segmentation and spatial layout analysis</li>
+  <li><strong>Obstacle avoidance</strong> — depth-aware obstacle proximity estimation</li>
+</ul>
+
+<div class="callout info">
+  <strong>Target Platforms:</strong> Raspberry Pi 4/5 (with Picamera2) and x86_64 desktops (USB camera via OpenCV). The pipeline automatically adapts its module set and performance parameters to the hardware profile.
+</div>
+
+<!-- ================================================================== -->
+<h2>2. Architecture Overview</h2>
+<p>
+The vision system follows a linear <strong>orchestrator pipeline pattern</strong>. A single <code>VisionPipeline</code> class owns a <code>CameraManager</code> instance and a set of sub-modules. At each tick it captures a frame, runs the modules in a defined order, and merges their outputs into a single dictionary. That dictionary is made available to the LLM reasoning layer via a thread-safe shared context.
+</p>
+
+<div class="flow">
+  <span class="flow-item">Camera</span>
+  <span class="flow-arrow">→</span>
+  <span class="flow-item green">CameraManager</span>
+  <span class="flow-arrow">→</span>
+  <span class="flow-item purple">VisionPipeline</span>
+  <span class="flow-arrow">→</span>
+  <span class="flow-item orange">Modules</span>
+  <span class="flow-arrow">→</span>
+  <span class="flow-item dark">Context Dict</span>
+  <span class="flow-arrow">→</span>
+  <span class="flow-item">LLM</span>
+</div>
+
+<p>
+The pipeline runs in a dedicated background thread, decoupling the camera frame-rate from the LLM inference cadence. Fresh context is produced continuously and stored in a ring buffer; the LLM consumer retrieves the most recent complete context snapshot on demand.
+</p>
+
+<!-- ================================================================== -->
+<h2>3. Files Overview</h2>
+<table>
+  <thead>
+    <tr><th>File</th><th>Lines</th><th>Role</th><th>Key Classes / Functions</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>__init__.py</code></td><td>1</td><td>Package marker</td><td>—</td></tr>
+    <tr><td><code>camera.py</code></td><td>~176</td><td>Camera abstraction layer</td><td><code>CameraManager</code></td></tr>
+    <tr><td><code>pipeline.py</code></td><td>~418</td><td>Orchestrator &amp; context assembly</td><td><code>VisionPipeline</code></td></tr>
+  </tbody>
+</table>
+
+<p>A further set of module implementations live under <code>vision/modules/</code> (not documented in detail here):</p>
+<table>
+  <thead>
+    <tr><th>Module</th><th>Class</th><th>Description</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>face_tracker.py</code></td><td><code>FaceIdentityTracker</code></td><td>Face detection, embedding, identity matching, landmarks</td></tr>
+    <tr><td><code>gesture.py</code></td><td><code>GestureDetector</code></td><td>Hand landmark extraction and gesture classification</td></tr>
+    <tr><td><code>emotion.py</code></td><td><code>EmotionDetector</code></td><td>Facial expression → emotion category mapping</td></tr>
+    <tr><td><code>objects.py</code></td><td><code>ObjectRecognitionModule</code></td><td>Object bounding box detection and labelling</td></tr>
+    <tr><td><code>scene.py</code></td><td><code>SceneSegmentationModule</code></td><td>Semantic segmentation and layout parsing</td></tr>
+    <tr><td><code>obstacle.py</code></td><td><code>ObstacleDetector</code></td><td>Depth-based obstacle proximity detection</td></tr>
+  </tbody>
+</table>
+
+<!-- ================================================================== -->
+<h2>4. Detailed File Explanations</h2>
+
+<h3>4.1 <code>camera.py</code> — CameraManager</h3>
+<p>
+<code>CameraManager</code> is the sole point of access for camera hardware. It provides a dual-backend strategy:
+</p>
+<ul>
+  <li><strong>Picamera2</strong> (Raspberry Pi) — uses the official <code>picamera2</code> library with a preview configuration at the configured resolution (<code>width &times; height</code>) and framerate.</li>
+  <li><strong>OpenCV</strong> (fallback / desktop) — uses <code>cv2.VideoCapture</code> with an ordered list of <code>fallback_indices</code>. It attempts each index in sequence until one succeeds.</li>
+</ul>
+
+<p>Key design points:</p>
+<ul>
+  <li>Backend is selected at construction time based on <code>IS_RASPBERRY_PI</code> (injected from <code>config.settings</code>).</li>
+  <li>On failure, <code>open()</code> returns <code>False</code> and marks the camera as unavailable; the pipeline degrades gracefully by producing a default context with an error message.</li>
+  <li><code>get_frame()</code> returns a <code>numpy.ndarray</code> (BGR) or <code>None</code>; frames are flipped vertically via OpenCV after capture (Picamera2 handles orientation natively).</li>
+  <li>The class implements the context manager protocol (<code>__enter__</code> / <code>__exit__</code>) for safe resource cleanup.</li>
+  <li>A <code>stream_buffer_size</code> parameter controls the internal deque size used by the streaming generator (<code>start_stream</code>).</li>
+</ul>
+
+<div class="screenshot">
+  <strong>Fig 4.1 — CameraManager Backend Selection &amp; Fallback</strong>
+  <span class="dim">[Screenshot: constructor branching on IS_RASPBERRY_PI, fallback loop in _open_opencv]</span>
+</div>
+
+<div class="screenshot">
+  <strong>Fig 4.2 — OpenCV Camera Opening with Retry Indices</strong>
+  <span class="dim">[Screenshot: _open_opencv iterating FALLBACK_INDICES, calling cv2.VideoCapture, checking isOpened()]</span>
+</div>
+
+<h3>4.2 <code>pipeline.py</code> — VisionPipeline</h3>
+<p>
+<code>VisionPipeline</code> is the orchestrator. It initialises, configures, and runs all vision sub-modules. It owns a <code>CameraManager</code> and manages a background processing thread.
+</p>
+
+<h4>Initialisation</h4>
+<p>
+The constructor allocates all sub-module references as <code>None</code>, creates a <code>deque</code> context buffer (maxlen = 10), and sets counters for frame-skip and thermal state tracking. No hardware resources are acquired until <code>open()</code> is called.
+</p>
+
+<h4><code>open()</code> — Start-Up Sequence</h4>
+<ol>
+  <li>Call <code>camera.open()</code> — acquire camera hardware.</li>
+  <li>If the camera is available, instantiate each sub-module (<code>FaceIdentityTracker</code>, <code>GestureDetector</code>, <code>EmotionDetector</code>, <code>ObjectRecognitionModule</code>, <code>SceneSegmentationModule</code>, <code>ObstacleDetector</code>).</li>
+  <li>Apply the current vision profile (<code>MINIMAL</code>, <code>BALANCED</code>, or <code>FULL</code>) — this enables or disables modules and adjusts frame-skip targets.</li>
+  <li>Call <code>warmup(frames=3)</code> to allow auto-exposure and face-detection caches to settle before producing useful context.</li>
+  <li>Start the background processing thread via <code>start()</code>.</li>
+</ol>
+
+<div class="screenshot">
+  <strong>Fig 4.3 — VisionPipeline.open() with Module Initialisation</strong>
+  <span class="dim">[Screenshot: camera open, module instantiations, apply_profile, warmup, thread start]</span>
+</div>
+
+<h4>Profile System</h4>
+<p>
+Three profiles are defined, each suited to a different hardware capability tier:
+</p>
+<table>
+  <thead>
+    <tr><th>Profile</th><th>Active Modules</th><th>Target Use</th><th>Frame Skip</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>MINIMAL</code></td><td>Face tracker only</td><td>Raspberry Pi Zero / low-power</td><td>3 (every 4th frame)</td></tr>
+    <tr><td><code>BALANCED</code></td><td>Face tracker, gesture, emotion</td><td>Raspberry Pi 4 / medium desktop</td><td>2 (every 3rd frame)</td></tr>
+    <tr><td><code>FULL</code></td><td>All six modules</td><td>Raspberry Pi 5 / desktop GPU</td><td>1 (every 2nd frame)</td></tr>
+  </tbody>
+</table>
+<p>
+Profiles can be switched at runtime via <code>set_profile(profile)</code>, enabling dynamic reconfiguration without a restart. The profile is also read from settings and applied automatically during <code>open()</code>.
+</p>
+
+<div class="screenshot">
+  <strong>Fig 4.4 — Profile Application for Different Hardware</strong>
+  <span class="dim">[Screenshot: _apply_profile method, conditional enabling of modules based on profile enum]</span>
+</div>
+
+<h4><code>get_all_context()</code> — The Main Processing Function</h4>
+<p>
+This is the core pipeline tick. It is called by the background thread on each iteration (subject to frame-skip). The execution order is:
+</p>
+<ol>
+  <li>Capture a frame via <code>camera.get_frame()</code>. If the frame is <code>None</code>, return a default context with an error entry.</li>
+  <li>Run <strong>face tracker</strong> — always executed regardless of profile (it is the most critical module for an interactive educational robot).</li>
+  <li>If a face was detected in the current frame, run <strong>gesture</strong> and <strong>emotion</strong> detection (these are face-relative).</li>
+  <li>Run <strong>object detection</strong>, <strong>scene segmentation</strong>, and <strong>obstacle detection</strong> in parallel (each operates on the full frame independently).</li>
+  <li>Merge all results into a single dictionary (using <code>{**face, **gesture, ...}</code> pattern).</li>
+  <li>Evaluate the &ldquo;best context&rdquo; heuristic (see below) and store it in the ring buffer.</li>
+  <li>Apply adaptive throttling based on frame processing time and CPU temperature.</li>
+</ol>
+
+<div class="screenshot">
+  <strong>Fig 4.5 — get_all_context() — The Main Processing Function</strong>
+  <span class="dim">[Screenshot: full method body showing frame capture, module calls, context merging]</span>
+</div>
+
+<h4>Adaptive Throttling &amp; Thermal Management</h4>
+<p>
+The <code>_adaptive_throttle()</code> method implements two independent back-pressure mechanisms:
+</p>
+<ul>
+  <li><strong>Thermal throttling</strong> — reads CPU temperature via <code>get_cpu_temperature()</code> (from <code>config.diagnostics</code>). When temperature exceeds <code>THERMAL_THROTTLE_C</code> (75&deg;C), the frame-skip counter is doubled. It is restored when temperature drops below <code>THERMAL_RESTORE_C</code>.</li>
+  <li><strong>Load shedding</strong> — measures the wall-clock time taken by the previous <code>get_all_context()</code> call. If it exceeds the target inter-frame period (derived from <code>CAMERA_FPS</code>), the frame-skip is incremented; if there is spare time, the skip is decremented (bounded to profile minimum).</li>
+</ul>
+
+<div class="screenshot">
+  <strong>Fig 4.6 — Adaptive Frame Skipping and Thermal Throttling</strong>
+  <span class="dim">[Screenshot: _adaptive_throttle method, temperature check, frame-time comparison]</span>
+</div>
+
+<h4>Best-Context-from-Buffer Algorithm</h4>
+<p>
+The pipeline maintains a <code>deque</code> of previous context dictionaries (maxlen = 10). When selecting the &ldquo;best&rdquo; context to expose to consumers, it scores each buffered entry based on a weighted heuristic:
+</p>
+<ul>
+  <li>Whether a face is present (<code>+50</code>)</li>
+  <li>Face confidence score (<code>+0 &ndash; 30</code>)</li>
+  <li>Number of detected objects (<code>+0 &ndash; 20</code>)</li>
+  <li>Whether gesture data is available (<code>+15</code>)</li>
+  <li>Frame timestamp freshness weight</li>
+</ul>
+<p>
+The highest-scoring entry is placed into the shared context for LLM consumption. This ensures that even if the current frame produced poor results (e.g., a motion blur), a recent high-quality context is still available.
+</p>
+
+<div class="screenshot">
+  <strong>Fig 4.7 — Best-Context-from-Buffer Algorithm</strong>
+  <span class="dim">[Screenshot: deque iteration, score computation, max selection]</span>
+</div>
+
+<h4>Default Context Structure</h4>
+<p>
+When no frame is available or the pipeline has not yet warmed up, a default context dictionary is returned. Its structure mirrors the real context so that LLM-facing code never has to handle missing keys:
+</p>
+
+<pre><code>{
+    "frame": null,
+    "timestamp": &lt;float&gt;,
+    "face_detected": False,
+    "face_bbox": None,
+    "face_landmarks": None,
+    "face_identity": None,
+    "face_confidence": 0.0,
+    "gesture": None,
+    "gesture_confidence": 0.0,
+    "emotion": None,
+    "emotion_confidence": 0.0,
+    "objects": [],
+    "scene_layout": None,
+    "obstacle_proximity": None,
+    "fps": 0.0,
+    "error": "No frame available"
+}
+</code></pre>
+
+<div class="screenshot">
+  <strong>Fig 4.8 — Default Context Structure</strong>
+  <span class="dim">[Screenshot: _default_context() method with overrides parameter]</span>
+</div>
+
+<!-- ================================================================== -->
+<h2>5. Sequence Flow</h2>
+<p>The following diagram captures the end-to-end data flow within a single pipeline tick:</p>
+
+<div class="flow">
+  <span class="flow-item green">Frame Capture</span>
+  <span class="flow-arrow">→</span>
+  <span class="flow-item">Face Tracker</span>
+  <span class="flow-arrow">→</span>
+  <span class="flow-item orange">Gesture</span>
+  <span class="flow-arrow">→</span>
+  <span class="flow-item orange">Emotion</span>
+  <span class="flow-arrow">→</span>
+  <span class="flow-item purple">Objects</span>
+  <span class="flow-arrow">→</span>
+  <span class="flow-item purple">Scene</span>
+  <span class="flow-arrow">→</span>
+  <span class="flow-item purple">Obstacle</span>
+  <span class="flow-arrow">→</span>
+  <span class="flow-item dark">Context Merge</span>
+  <span class="flow-arrow">→</span>
+  <span class="flow-item dark">Buffer</span>
+  <span class="flow-arrow">→</span>
+  <span class="flow-item">LLM</span>
+</div>
+
+<ol>
+  <li><strong>Frame capture</strong> — <code>CameraManager.get_frame()</code> reads one raw BGR frame from the active backend. Resolution and FPS are governed by <code>config.settings.CAMERA_*</code> values.</li>
+  <li><strong>Face tracking</strong> — The <code>FaceIdentityTracker</code> runs detection + embedding on the full frame. It returns bounding boxes, landmarks, an identity string (if match found), and a confidence score.</li>
+  <li><strong>Gesture &amp; Emotion (conditional)</strong> — If at least one face was found, the <code>GestureDetector</code> and <code>EmotionDetector</code> receive the face bounding box region or the full frame (module-dependent). Both return a label and confidence.</li>
+  <li><strong>Object recognition</strong> — <code>ObjectRecognitionModule</code> runs a pretrained object detector (YOLO / SSD) on the full frame, returning a list of <code>(label, bbox, confidence)</code> tuples.</li>
+  <li><strong>Scene segmentation</strong> — <code>SceneSegmentationModule</code> performs semantic pixel-wise segmentation, returning a mask array and a high-level scene label (e.g., <code>"indoor_classroom"</code>, <code>"outdoor_playground"</code>).</li>
+  <li><strong>Obstacle detection</strong> — <code>ObstacleDetector</code> analyses depth information (monocular depth estimation or dedicated depth sensor) to return proximity values for the nearest obstacles in the robot's path.</li>
+  <li><strong>Context merge &amp; buffer</strong> — All module outputs are merged into a single flat dictionary. The buffer scoring heuristic selects the best entry for sharing.</li>
+  <li><strong>LLM consumption</strong> — The LLM reasoning layer calls <code>pipeline.get_shared_context()</code> which returns the current best context snapshot, lock-free (an <code>atomic</code> reference swap ensures thread safety).</li>
+</ol>
+
+<!-- ================================================================== -->
+<h2>6. Folder Integration</h2>
+<p>The <code>vision/</code> package does not operate in isolation. It integrates with the broader robot software stack through several interfaces:</p>
+
+<table>
+  <thead>
+    <tr><th>Integration</th><th>Mechanism</th><th>Direction</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>Vision → LLM</td><td><code>pipeline.get_shared_context()</code> returns the best context dict, which is injected into the LLM prompt template as structured context.</td><td>Outbound</td></tr>
+    <tr><td>Vision → Voice Pipeline</td><td>Face identity and emotion data may trigger proactive speech (e.g., "Hello {name}!" if a known face is detected).</td><td>Outbound</td></tr>
+    <tr><td>Vision → Config</td><td><code>config.settings</code> provides camera parameters, profile selection, fallback indices, and hardware flags (<code>IS_RASPBERRY_PI</code>).</td><td>Inbound</td></tr>
+    <tr><td>Vision → Diagnostics</td><td><code>config.diagnostics.get_cpu_temperature()</code> supplies thermal data for adaptive throttling.</td><td>Inbound</td></tr>
+    <tr><td>Vision → Dashboard</td><td>Frame rate statistics, active profile, thermal state, and per-module latency may be exposed via a debug API for real-time monitoring.</td><td>Outbound</td></tr>
+  </tbody>
+</table>
+
+<!-- ================================================================== -->
+<h2>7. Technical Notes</h2>
+
+<h3>7.1 OpenCV</h3>
+<p>
+OpenCV (<code>cv2</code>) serves as the universal fallback backend and is also used for image manipulation (resizing, flipping, colour space conversion) regardless of the capture backend. The pipeline assumes BGR colour ordering throughout.
+</p>
+
+<h3>7.2 Picamera2</h3>
+<p>
+On Raspberry Pi hardware, the <code>picamera2</code> library provides lower latency and hardware-accelerated encoding compared with OpenCV's V4L2 backend. The preview configuration is used at the resolution and framerate specified in settings. If <code>picamera2</code> is not installed (or import fails), the system falls back to OpenCV automatically.
+</p>
+
+<h3>7.3 Watershed Pattern</h3>
+<p>
+The &ldquo;watershed&rdquo; analogy applies to the way the pipeline separates concerns: each module operates on its own &ldquo;catchment area&rdquo; of the input frame (full-frame for objects/scene/obstacle, face-region for gesture/emotion) and drains its output into the central context buffer. This avoids coupling between modules and allows them to be enabled, disabled, or replaced independently.
+</p>
+
+<h3>7.4 Threading</h3>
+<p>
+The pipeline runs in a single dedicated thread (not a thread pool) to avoid GIL contention in CPython. Context sharing with the LLM thread uses an <code>atomic</code> reference swap — the background thread writes to a private buffer and swaps a pointer; the reader reads the pointer and copies the dict. This is lock-free in practice because dict reads are atomic in CPython (implementation-specific).
+</p>
+
+<h3>7.5 Context Managers</h3>
+<p>
+Both <code>CameraManager</code> and <code>VisionPipeline</code> implement <code>__enter__</code> / <code>__exit__</code> so they can be used in <code>with</code> statements, ensuring that camera resources are released even if an exception occurs:
+</p>
+<pre><code>with VisionPipeline() as pipeline:
+    pipeline.open()
+    context = pipeline.get_shared_context()</code></pre>
+
+<!-- ================================================================== -->
+<h2>8. Academic Explanation — Design Rationale</h2>
+
+<h3>8.1 Why an Orchestrator Pipeline?</h3>
+<p>
+A monolithic &ldquo;one function does everything&rdquo; approach would be brittle and hard to maintain. The orchestrator pattern decouples the capture layer (<code>CameraManager</code>) from the processing layer (<code>VisionPipeline</code>) from individual vision tasks (the modules). This means:
+</p>
+<ul>
+  <li>Each module can be developed, tested, and profiled in isolation.</li>
+  <li>A failure in one module (e.g., gesture model fails to load) does not crash the pipeline — it simply produces a <code>None</code> output for that key.</li>
+  <li>Adding a new vision capability requires writing a new module class and registering it in the pipeline; no other code changes are needed.</li>
+</ul>
+
+<h3>8.2 Profile System — RPi vs Desktop</h3>
+<p>
+The dual-platform requirement (Raspberry Pi for cost-optimised deployment, x86_64 desktop for development and high-performance scenarios) drove the design of the profile system:
+</p>
+<ul>
+  <li><strong>MINIMAL</strong> — targets edge devices with limited compute; only face tracking runs, and frame-skip is aggressive (every 4th frame processed).</li>
+  <li><strong>BALANCED</strong> — the default for RPi 4; adds gesture and emotion, which are face-region-only and therefore cheap, plus moderate frame-skip (every 3rd frame).</li>
+  <li><strong>FULL</strong> — for desktop GPUs or RPi 5 with a neural compute stick; all six modules run with minimal frame-skip.</li>
+</ul>
+<p>
+The profile abstraction allows the same codebase to serve both deployment targets without conditional logic scattered throughout the pipeline. Runtime switching makes it possible to &ldquo;turbo&rdquo; the system during critical interactions and &ldquo;eco&rdquo; mode during idle periods.
+</p>
+
+<h3>8.3 Adaptive Performance — Why It Matters</h3>
+<p>
+An educational robot operates in unpredictable environments. Classroom lighting changes, the robot may overheat on a sunny windowsill, or a computationally expensive face may enter the frame. Fixed frame-skip and module sets cannot handle all scenarios. The adaptive throttling system:
+</p>
+<ol>
+  <li><strong>Prevents thermal shutdown</strong> — by shedding load at 75&deg;C, the system maintains functionality (at reduced fidelity) rather than crashing.</li>
+  <li><strong>Maintains latency bounds</strong> — load shedding keeps per-frame latency under the target inter-frame period, preventing the context from becoming stale.</li>
+  <li><strong>Recovers automatically</strong> — when temperature drops or frame time improves, the system gradually restores full operation.</li>
+</ol>
+
+<h3>8.4 Best-Context-from-Buffer — Robustness to Transient Failures</h3>
+<p>
+Camera frames on low-cost hardware are noisy. Motion blur, auto-exposure transitions, and partial occlusions can produce a single bad frame. The buffer-based best-context algorithm provides temporal smoothing: a brief dropout or blurry frame does not propagate to the LLM. The score heuristic prioritises frames with faces and high detection confidence, which aligns with the robot's primary interaction goal (talking to people).
+</p>
+
+<h3>8.5 Future Improvements</h3>
+<ul>
+  <li><strong>Hardware acceleration</strong> — offload object detection and segmentation to a Coral TPU or NVIDIA Jetson GPU via TensorRT.</li>
+  <li><strong>Multi-camera support</strong> — a stereo pair or separate wide-angle / telephoto cameras could feed different modules.</li>
+  <li><strong>Predictive frame skipping</strong> — use a lightweight motion estimator to skip frames that are near-duplicates of the previous frame, saving compute.</li>
+  <li><strong>Module priority scheduling</strong> — assign a priority and budget per module (e.g., face tracking gets 50&nbsp;ms, objects gets 100&nbsp;ms) and abort modules that exceed their budget.</li>
+  <li><strong>Event-driven triggering</strong> — instead of polling at a fixed rate, trigger context capture on motion events or voice activity detection.</li>
+</ul>
+
+<div class="callout">
+  <strong>Document Version:</strong> 1.0 &mdash; Generated for graduation-project submission.
+</div>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,644 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LLM Module Documentation — Language Model Integration</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', 'Roboto', Arial, sans-serif; line-height: 1.7; color: #1a1a2e; background: #fff; padding: 0; margin: 0; }
+  .container { max-width: 1000px; margin: 0 auto; padding: 40px 30px; }
+  
+  /* Cover / Title */
+  .cover { text-align: center; padding: 60px 0 40px; border-bottom: 4px solid #0f3460; margin-bottom: 40px; }
+  .cover h1 { font-size: 2.2em; color: #0f3460; margin-bottom: 10px; letter-spacing: 0.5px; }
+  .cover .subtitle { font-size: 1.1em; color: #555; margin-bottom: 20px; }
+  .cover .meta { font-size: 0.85em; color: #888; }
+  .badge { display: inline-block; background: #0f3460; color: #fff; padding: 4px 16px; border-radius: 20px; font-size: 0.8em; margin: 5px 4px; }
+
+  h2 { font-size: 1.6em; color: #0f3460; margin: 50px 0 20px; padding-bottom: 8px; border-bottom: 2px solid #e0e0e0; }
+  h3 { font-size: 1.2em; color: #16213e; margin: 30px 0 12px; }
+  h4 { font-size: 1em; color: #333; margin: 20px 0 8px; }
+
+  p { margin: 12px 0; text-align: justify; }
+  ul, ol { margin: 10px 0 10px 25px; }
+  li { margin: 5px 0; }
+
+  table { width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 0.92em; }
+  th, td { border: 1px solid #ccc; padding: 10px 14px; text-align: left; vertical-align: top; }
+  th { background: #0f3460; color: #fff; font-weight: 600; }
+  tr:nth-child(even) { background: #f7f9fc; }
+
+  pre { background: #1e1e2e; color: #cdd6f4; padding: 16px 20px; border-radius: 8px; overflow-x: auto; font-size: 0.85em; line-height: 1.5; margin: 16px 0; box-shadow: 0 2px 8px rgba(0,0,0,0.15); }
+  code { font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace; background: #f0f0f0; padding: 2px 6px; border-radius: 4px; font-size: 0.9em; }
+  pre code { background: transparent; padding: 0; border-radius: 0; }
+
+  .screenshot-placeholder { background: linear-gradient(135deg, #e8edf5 0%, #d5dde8 100%); border: 2px dashed #0f3460; border-radius: 10px; padding: 35px 20px; margin: 20px 0; text-align: center; color: #0f3460; font-weight: 600; }
+  .screenshot-placeholder .label { font-size: 0.9em; color: #444; margin-top: 8px; font-weight: 400; }
+
+  .diagram { background: #f8faff; border: 1px solid #b0c4de; border-radius: 10px; padding: 30px 20px; margin: 20px 0; text-align: center; font-family: 'Cascadia Code', monospace; font-size: 0.9em; line-height: 1.8; }
+  .diagram .arrow { color: #0f3460; }
+  .diagram .box { display: inline-block; background: #0f3460; color: #fff; padding: 8px 18px; border-radius: 6px; margin: 4px; font-weight: 600; }
+  .diagram .box-alt { background: #e94560; }
+  .diagram .box-green { background: #2d6a4f; }
+  .diagram .box-outline { background: #fff; color: #0f3460; border: 2px solid #0f3460; padding: 6px 16px; }
+
+  .note { background: #fff8e1; border-left: 5px solid #f9a825; padding: 14px 18px; margin: 16px 0; border-radius: 4px; }
+  .info { background: #e3f2fd; border-left: 5px solid #1565c0; padding: 14px 18px; margin: 16px 0; border-radius: 4px; }
+  .warn { background: #fce4ec; border-left: 5px solid #c62828; padding: 14px 18px; margin: 16px 0; border-radius: 4px; }
+
+  .class-header { background: #0f3460; color: #fff; padding: 6px 14px; border-radius: 6px 6px 0 0; font-weight: 700; font-size: 1em; margin-top: 25px; }
+  .class-body { border: 1px solid #0f3460; border-top: none; border-radius: 0 0 6px 6px; padding: 14px; margin-bottom: 10px; }
+
+  .page-break { page-break-before: always; }
+  @media print { body { font-size: 11pt; } .container { padding: 20px; } .cover { padding: 30px 0; } }
+
+  strong { color: #0f3460; }
+  a { color: #1565c0; text-decoration: none; }
+  a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<!-- ===== COVER ===== -->
+<div class="cover">
+  <h1>LLM Module Documentation</h1>
+  <div class="subtitle">Language Model Integration — Rope Educational Robot Project</div>
+  <div>
+    <span class="badge">Python 3.10+</span>
+    <span class="badge">OpenRouter API</span>
+    <span class="badge">SQLite</span>
+    <span class="badge">Bilingual (AR/EN)</span>
+    <span class="badge">Sliding Window</span>
+  </div>
+  <div class="meta">Document Version 1.0 &mdash; Graduation Project Technical Report</div>
+</div>
+
+<!-- ===== 1. FOLDER PURPOSE ===== -->
+<h2>1. Folder Purpose</h2>
+<p>
+The <code>llm/</code> folder serves as the conversational intelligence core of the Rope educational robot. Its primary responsibility is to connect the robot's voice pipeline (Automatic Speech Recognition &rarr; Text) with a Large Language Model (LLM) accessed through the OpenRouter API, and return a natural-language response that is then passed to the Text-to-Speech (TTS) subsystem.
+</p>
+<p>
+<strong>Problem Solved:</strong> Educational robots require fluent, context-aware, bilingual (Arabic/English) conversation. Running a local LLM on embedded hardware is impractical due to resource constraints. This module bridges that gap by providing a lightweight, retry-resilient API client to remote LLM services while managing conversation state, memory windows, and vision-derived context (facial expressions, gestures, emotions, objects, obstacles).
+</p>
+<p>
+<strong>Architecture Role:</strong> The LLM module acts as the central reasoning engine. It receives textual user input (from ASR) optionally enriched with vision context (from the vision pipeline), maintains per-session conversation history in a SQLite database, applies a sliding-window memory strategy, and produces coherent, pedagogically appropriate responses in the user's chosen language.
+</p>
+
+<!-- ===== 2. ARCHITECTURE OVERVIEW ===== -->
+<h2>2. Architecture Overview</h2>
+<p>The diagram below illustrates the data flow through the LLM module and its interaction with adjacent subsystems:</p>
+
+<div class="diagram">
+  <span class="box">Voice (Mic)</span>
+  <span class="arrow">&rarr;</span>
+  <span class="box box-alt">ASR Module</span>
+  <span class="arrow">&rarr;</span>
+  <span class="box">LLMModule</span>
+  <span class="arrow">&rarr;</span>
+  <span class="box box-green">OpenRouter API</span>
+  <span class="arrow">&rarr;</span>
+  <span class="box">TTS Engine</span>
+  <span class="arrow">&rarr;</span>
+  <span class="box">Speaker</span>
+  <br><br>
+  <span style="font-size:0.85em; color:#555;">Vision Pipeline</span>
+  <span class="arrow">&darr;</span>
+  <span style="font-size:0.85em;"><span class="box-outline">vision_context</span></span>
+  <span class="arrow" style="margin-left:10px;">&rarr;</span>
+  <span class="box-outline" style="border-color:#e94560; color:#e94560;">LLMModule.chat()</span>
+  <br><br>
+  <span style="font-size:0.85em; color:#555;">Session Flow:</span><br>
+  <span class="box-outline" style="font-size:0.8em;">create_session()</span>
+  <span class="arrow">&rarr;</span>
+  <span class="box-outline" style="font-size:0.8em;">chat()</span>
+  <span class="arrow">&rarr;</span>
+  <span class="box-outline" style="font-size:0.8em;">SessionManager</span>
+  <span class="arrow">&rarr;</span>
+  <span class="box-outline" style="font-size:0.8em;">MemoryManager</span>
+  <span class="arrow">&rarr;</span>
+  <span class="box-outline" style="font-size:0.8em;">summarize()</span>
+  <span class="arrow">&rarr;</span>
+  <span class="box-outline" style="font-size:0.8em;">OpenRouterConnection.chat()</span>
+</div>
+
+<div class="info">
+  <strong>Key Insight:</strong> The LLM module abstracts away API complexity, retry logic, database persistence, and memory management behind a simple <code>chat(session_id, user_message, vision_context)</code> interface.
+</div>
+
+<!-- ===== 3. FILES OVERVIEW TABLE ===== -->
+<h2>3. Files Overview</h2>
+<table>
+  <thead>
+    <tr><th style="width:25%;">File</th><th style="width:15%;">Size</th><th>Purpose</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>__init__.py</code></td><td>Empty</td><td>Marks <code>llm/</code> as a Python package. No exports or initialization logic.</td></tr>
+    <tr><td><code>module.py</code></td><td>~440 lines</td><td>Contains all classes and functions: <code>LLMModuleError</code>, <code>_get_db_connection</code>, <code>_close_db_connection</code>, <code>build_vision_prompt</code>, <code>OpenRouterConnection</code>, <code>SessionManager</code>, <code>MemoryManager</code>, <code>LLMModule</code>.</td></tr>
+  </tbody>
+</table>
+
+<!-- ===== 4. DETAILED FILE EXPLANATIONS ===== -->
+<h2>4. Detailed File Explanations</h2>
+
+<h3>4.1 <code>__init__.py</code></h3>
+<p>An empty file that designates the <code>llm/</code> directory as a Python package. No symbols are exported; consumers import directly from <code>llm.module</code>.</p>
+
+<h3>4.2 <code>module.py</code> &mdash; Full Reference</h3>
+<p>This file is the sole implementation module. Below is a method-by-method explanation of every component.</p>
+
+<!-- LLMModuleError -->
+<div class="class-header">&raquo; LLMModuleError(RuntimeError)</div>
+<div class="class-body">
+  <p>A custom exception class inheriting from <code>RuntimeError</code>. Raised throughout the module to signal LLM-specific failures (API unreachable, database errors, invalid sessions, summarization failures). Using a domain-specific exception allows callers to catch and handle LLM errors distinctly from general system errors.</p>
+</div>
+
+<!-- _get_db_connection -->
+<div class="class-header">&raquo; _get_db_connection(db_path)</div>
+<div class="class-body">
+  <p><strong>Purpose:</strong> Provides a thread-local SQLite connection for the given database path. Uses <code>threading.local()</code> storage so each thread gets its own connection, avoiding SQLite's concurrent-write limitations.</p>
+  <p><strong>Algorithm:</strong></p>
+  <ol>
+    <li>Access <code>_local.connections</code> dictionary (initialized per thread).</li>
+    <li>If no connection exists for <code>db_path</code>, create one via <code>sqlite3.connect()</code>.</li>
+    <li>Enable WAL journal mode (<code>PRAGMA journal_mode=WAL</code>) for concurrent reads.</li>
+    <li>Set <code>synchronous=NORMAL</code> for performance.</li>
+    <li>Set <code>busy_timeout=5000</code> (5-second wait on lock).</li>
+    <li>Enable row factory (<code>sqlite3.Row</code>), foreign keys, and <code>isolation_level=None</code> (autocommit).</li>
+    <li>Return the connection.</li>
+  </ol>
+  <p><strong>Edge Cases:</strong> Handles concurrent thread access safely; creates connections lazily; each thread isolated.</p>
+</div>
+
+<!-- _close_db_connection -->
+<div class="class-header">&raquo; _close_db_connection()</div>
+<div class="class-body">
+  <p><strong>Purpose:</strong> Closes all SQLite connections stored in the current thread's <code>_local</code> storage. Iterates over the <code>_local.connections</code> dict, calls <code>close()</code> on each, then clears the dict. Safe to call multiple times.</p>
+</div>
+
+<!-- build_vision_prompt -->
+<div class="class-header">&raquo; build_vision_prompt(user_message, vision_context)</div>
+<div class="class-body">
+  <p><strong>Purpose:</strong> Constructs an Arabic-language natural-language prompt that describes what the robot's vision system has detected. This prompt is prepended to the user message so the LLM can respond with environmental awareness.</p>
+  <p><strong>Parameters:</strong></p>
+  <ul>
+    <li><code>user_message: str</code> &mdash; The original user text.</li>
+    <li><code>vision_context: dict</code> &mdash; Contains keys: <code>face</code> (bool), <code>gesture</code> (str), <code>emotion</code> (str), <code>objects</code> (list of str), <code>obstacles</code> (list of str).</li>
+  </ul>
+  <p><strong>Algorithm:</strong></p>
+  <ol>
+    <li>Build a multi-sentence Arabic string describing detected faces, gestures, emotions, visible objects, and obstacles.</li>
+    <li>If no vision data is present (all lists empty, no face), return the original <code>user_message</code> unchanged.</li>
+    <li>Otherwise, prepend the vision description to the user message, separated by a newline.</li>
+  </ol>
+  <p><strong>Edge Cases:</strong> Gracefully handles missing keys, empty lists, or <code>None</code> values. Non-Arabic users will receive English prompts from the LLM system prompt instead; the vision context remains Arabic but the model is instructed bilingually.</p>
+</div>
+
+<!-- OpenRouterConnection -->
+<div class="class-header">&raquo; OpenRouterConnection</div>
+<div class="class-body">
+  <p>Manages all HTTP communication with the <a href="https://openrouter.ai">OpenRouter API</a>, which provides unified access to dozens of LLMs (GPT-4o, Claude, Gemini, DeepSeek, etc.).</p>
+  
+  <h4><code>__init__(api_key, model, chat_timeout, availability_timeout)</code></h4>
+  <p>Stores the API key, model identifier (e.g., <code>"openai/gpt-4o"</code>), and timeout values. Constructs the base URL: <code>https://openrouter.ai/api/v1</code>. Does <em>not</em> perform network calls.</p>
+  
+  <h4><code>is_available()</code></h4>
+  <p>Sends a GET request to <code>/models</code> with <code>availability_timeout</code>. Returns <code>True</code> if the API responds with HTTP 200, <code>False</code> otherwise. Used as a health check before initiating conversation.</p>
+  
+  <h4><code>chat(messages, timeout)</code></h4>
+  <p><strong>Purpose:</strong> Sends a conversation history to the OpenRouter chat completions endpoint (<code>POST /chat/completions</code>) and returns the model's text response.</p>
+  <p><strong>Parameters:</strong></p>
+  <ul>
+    <li><code>messages: list[dict]</code> &mdash; Standard OpenAI-format messages (<code>[{"role": "system", "content": "..."}, {"role": "user", "content": "..."}]</code>).</li>
+    <li><code>timeout: int</code> &mdash; Request timeout in seconds (defaults to <code>chat_timeout</code>).</li>
+  </ul>
+  <p><strong>Algorithm &amp; Retry Logic:</strong></p>
+  <ol>
+    <li>Send POST request with headers (<code>Authorization: Bearer &lt;key&gt;</code>, <code>Content-Type: application/json</code>).</li>
+    <li>If HTTP 200: parse <code>response.json()["choices"][0]["message"]["content"]</code> and return.</li>
+    <li>If HTTP 429 (rate limited) or 5xx (server error): retry up to <strong>3 attempts</strong> with <strong>exponential backoff</strong> (1s, 2s, 4s sleep between retries).</li>
+    <li>On all failures after retries: raise <code>LLMModuleError</code> with descriptive message.</li>
+    <li>Other HTTP statuses: raise <code>LLMModuleError</code> immediately.</li>
+  </ol>
+  <p><strong>Edge Cases:</strong> Network timeouts, DNS failures, malformed JSON responses, empty response content.</p>
+</div>
+
+<!-- SessionManager -->
+<div class="class-header">&raquo; SessionManager</div>
+<div class="class-body">
+  <p>Persists conversation sessions, messages, and summaries to a SQLite database. Each session represents a single conversation between a student and the robot.</p>
+  
+  <h4><code>__init__(db_path)</code></h4>
+  <p>Stores the database path and calls <code>_init_db()</code>.</p>
+  
+  <h4><code>_init_db()</code></h4>
+  <p>Creates three tables (if not exist):</p>
+  <ul>
+    <li><strong>sessions:</strong> <code>id</code> (TEXT PK), <code>student_name</code> (TEXT), <code>language</code> (TEXT: 'ar' or 'en'), <code>summary</code> (TEXT), <code>created_at</code> (TIMESTAMP DEFAULT CURRENT_TIMESTAMP).</li>
+    <li><strong>messages:</strong> <code>id</code> (INTEGER PK AUTOINCREMENT), <code>session_id</code> (TEXT FK), <code>role</code> (TEXT: 'user'|'assistant'|'system'), <code>content</code> (TEXT), <code>timestamp</code> (TIMESTAMP DEFAULT CURRENT_TIMESTAMP).</li>
+    <li><strong>summaries:</strong> <code>id</code> (INTEGER PK AUTOINCREMENT), <code>session_id</code> (TEXT FK), <code>summary_text</code> (TEXT), <code>message_count</code> (INTEGER), <code>created_at</code> (TIMESTAMP DEFAULT CURRENT_TIMESTAMP).</li>
+  </ul>
+  
+  <h4><code>create_session()</code></h4>
+  <p>Generates a UUID, inserts a row into <code>sessions</code> with the provided <code>student_name</code> and <code>language</code>, and returns the session UUID.</p>
+  
+  <h4><code>add_message(session_id, role, content)</code></h4>
+  <p>Inserts a message row and commits immediately (autocommit mode).</p>
+  
+  <h4><code>get_sliding_window(session_id, limit)</code></h4>
+  <p>Retrieves the last <code>limit</code> messages for a session, ordered by timestamp ascending. Returns a list of <code>{role, content}</code> dicts suitable for LLM consumption.</p>
+  
+  <h4><code>get_full_history(session_id)</code></h4>
+  <p>Returns all messages for a session (no limit). Used for summarization.</p>
+  
+  <h4><code>get_message_count(session_id)</code></h4>
+  <p>Returns the total number of messages in a session via <code>COUNT(*)</code>.</p>
+  
+  <h4><code>save_summary(session_id, summary_text, message_count)</code></h4>
+  <p>Inserts a summary row and updates the <code>summary</code> field in the <code>sessions</code> table.</p>
+  
+  <h4><code>get_session_language(session_id)</code></h4>
+  <p>Retrieves the <code>language</code> field for a given session. Used to determine system prompt language.</p>
+  
+  <h4><code>close_connections()</code></h4>
+  <p>Wraps <code>_close_db_connection()</code> for cleanup. Should be called on application shutdown.</p>
+</div>
+
+<!-- MemoryManager -->
+<div class="class-header">&raquo; MemoryManager</div>
+<div class="class-body">
+  <p>Implements conversation windowing and automatic summarization to keep context within LLM token limits.</p>
+  
+  <h4><code>__init__(session_manager, openrouter, window_size)</code></h4>
+  <p>Stores references to the <code>SessionManager</code>, <code>OpenRouterConnection</code>, and window size (default 20).</p>
+  
+  <h4><code>should_summarize(session_id)</code></h4>
+  <p>Checks if the current message count is a multiple of <code>window_size</code>. If so, triggers summarization. This ensures periodic condensation without interrupting every turn.</p>
+  
+  <h4><code>summarize(session_id)</code></h4>
+  <p><strong>Algorithm:</strong></p>
+  <ol>
+    <li>Fetch the full message history via <code>session_manager.get_full_history(session_id)</code>.</li>
+    <li>Construct a meta-prompt instructing the LLM to "Summarize the following conversation concisely, preserving key facts, the student's name, skill level, and learning goals."</li>
+    <li>Send the prompt to <code>openrouter.chat()</code>.</li>
+    <li>Save the returned summary via <code>session_manager.save_summary()</code>.</li>
+    <li>The summary is included in subsequent system prompts to maintain long-term context.</li>
+  </ol>
+  <p><strong>Edge Cases:</strong> Empty history, LLM failure (summary skipped gracefully), concurrent summarization.</p>
+</div>
+
+<!-- LLMModule -->
+<div class="class-header">&raquo; LLMModule (Main API)</div>
+<div class="class-body">
+  <p>The primary interface consumed by the rest of the application. Coordinates session management, OpenRouter communication, and memory management.</p>
+  
+  <h4><code>__init__(backend, session_manager)</code></h4>
+  <p>Stores configuration. <code>backend</code> is a dict containing: <code>api_key</code>, <code>model</code>, <code>chat_timeout</code>, <code>availability_timeout</code>, <code>window_size</code>. Creates <code>OpenRouterConnection</code> and <code>MemoryManager</code> instances.</p>
+  
+  <h4><code>create_session(student_name, language)</code></h4>
+  <p>Delegates to <code>session_manager.create_session()</code>. Returns the new session UUID.</p>
+  
+  <h4><code>is_ready()</code></h4>
+  <p>Returns <code>True</code> if the OpenRouter API is reachable (via <code>OpenRouterConnection.is_available()</code>). Used by the application startup to verify connectivity.</p>
+  
+  <h4><code>chat(session_id, user_message, vision_context)</code></h4>
+  <p><strong>Purpose:</strong> The core conversational method. Processes one user turn and returns the LLM response.</p>
+  <p><strong>Algorithm:</strong></p>
+  <ol>
+    <li>Determine session language via <code>session_manager.get_session_language(session_id)</code>.</li>
+    <li>Build the system prompt:
+      <ul>
+        <li><strong>Arabic:</strong> instructs the robot to respond in Arabic as an intelligent educational assistant for children, using modern standard Arabic (fus-ha), encouraging interaction.</li>
+        <li><strong>English:</strong> instructs the robot to respond in English as an intelligent educational assistant, using clear child-friendly language.</li>
+      </ul>
+      If a summary exists, append it to the system prompt.
+    </li>
+    <li>Augment the user message with vision context via <code>build_vision_prompt()</code>.</li>
+    <li>Retrieve the sliding window (last N messages) via <code>session_manager.get_sliding_window()</code>.</li>
+    <li>Construct the message list: system prompt + sliding window + current user message.</li>
+    <li>Send to <code>OpenRouterConnection.chat()</code>.</li>
+    <li>Store the user message and assistant response via <code>session_manager.add_message()</code>.</li>
+    <li>Check <code>memory_manager.should_summarize()</code> and trigger summarization if needed.</li>
+    <li>Return the assistant's response text.</li>
+  </ol>
+  <p><strong>Edge Cases:</strong> Invalid session ID, API failure (raised to caller), vision pipeline offline (empty context), very long user messages, database connection loss.</p>
+  
+  <h4><code>close()</code></h4>
+  <p>Calls <code>session_manager.close_connections()</code> to cleanly close all database connections.</p>
+</div>
+
+<!-- ===== 5. CODE WALKTHROUGH ===== -->
+<h2>5. Code Walkthrough — Key Algorithms &amp; Patterns</h2>
+
+<p>The following annotated walkthroughs highlight the most important implementation patterns in the module.</p>
+
+<!-- 5.1 -->
+<div class="screenshot-placeholder">
+  <div style="font-size:1.4em;">&#x1F4F7; Screenshot Placeholder 1</div>
+  <div class="label">Thread-Local DB Connection with WAL Mode</div>
+  <div style="margin-top:12px; text-align:left; font-size:0.85em; max-width:500px; margin-left:auto; margin-right:auto;">
+    <strong>Educational Focus:</strong><br>
+    &bull; <code>threading.local()</code> provides per-thread storage &mdash; each thread gets its own connection, preventing SQLite's "database is locked" errors.<br>
+    &bull; WAL (Write-Ahead Logging) allows concurrent reads while writing, crucial for a robot that may have multiple components querying session state simultaneously.<br>
+    &bull; <code>synchronous=NORMAL</code> offers a performance/safety tradeoff (faster than FULL, safer than OFF).<br>
+    &bull; <code>busy_timeout=5000</code> makes the connection wait 5 seconds instead of immediately failing when the database is locked.
+  </div>
+</div>
+
+<!-- 5.2 -->
+<div class="screenshot-placeholder">
+  <div style="font-size:1.4em;">&#x1F4F7; Screenshot Placeholder 2</div>
+  <div class="label">Vision Context Prompt Construction (<code>build_vision_prompt</code>)</div>
+  <div style="margin-top:12px; text-align:left; font-size:0.85em; max-width:500px; margin-left:auto; margin-right:auto;">
+    <strong>Educational Focus:</strong><br>
+    &bull; Multi-modal integration: vision pipeline output (face detection, emotion classification, object recognition) is converted into a textual prefix.<br>
+    &bull; Arabic prompt construction follows a sentence template: detected faces &rarr; gestures &rarr; emotions &rarr; objects &rarr; obstacles.<br>
+    &bull; The function gracefully handles missing/empty fields with conditional checks, ensuring robustness when the vision pipeline is partially offline.
+  </div>
+</div>
+
+<!-- 5.3 -->
+<div class="screenshot-placeholder">
+  <div style="font-size:1.4em;">&#x1F4F7; Screenshot Placeholder 3</div>
+  <div class="label">OpenRouter Chat with Retry Logic &amp; Exponential Backoff</div>
+  <div style="margin-top:12px; text-align:left; font-size:0.85em; max-width:500px; margin-left:auto; margin-right:auto;">
+    <strong>Educational Focus:</strong><br>
+    &bull; 3 retry attempts with exponential backoff: sleep durations of 1s, 2s, 4s (2<sup>attempt</sup>).<br>
+    &bull; Only retries on HTTP 429 (rate limited) and 5xx (server errors). Client errors (4xx except 429) raise immediately.<br>
+    &bull; Uses <code>requests.Session</code> for connection pooling and efficient keep-alive.<br>
+    &bull; <code>timeout</code> parameter prevents indefinite hangs; DNS/TCP timeouts are handled by the requests library.
+  </div>
+</div>
+
+<!-- 5.4 -->
+<div class="screenshot-placeholder">
+  <div style="font-size:1.4em;">&#x1F4F7; Screenshot Placeholder 4</div>
+  <div class="label">Session Management &amp; Sliding Window Retrieval</div>
+  <div style="margin-top:12px; text-align:left; font-size:0.85em; max-width:500px; margin-left:auto; margin-right:auto;">
+    <strong>Educational Focus:</strong><br>
+    &bull; <code>get_sliding_window()</code> uses <code>ORDER BY timestamp DESC LIMIT ?</code> with a subquery to return the last N messages in chronological order.<br>
+    &bull; Sliding window prevents unbounded token growth &mdash; only the most recent messages are sent to the LLM for each turn.<br>
+    &bull; Older context is preserved via summarization, not discarded entirely.
+  </div>
+</div>
+
+<!-- 5.5 -->
+<div class="screenshot-placeholder">
+  <div style="font-size:1.4em;">&#x1F4F7; Screenshot Placeholder 5</div>
+  <div class="label">Language-Specific System Prompts (Arabic / English)</div>
+  <div style="margin-top:12px; text-align:left; font-size:0.85em; max-width:500px; margin-left:auto; margin-right:auto;">
+    <strong>Educational Focus:</strong><br>
+    &bull; System prompt is dynamically selected based on the session's <code>language</code> field ('ar' or 'en').<br>
+    &bull; Arabic prompt instructs: "You are an intelligent educational robot for children. Respond in Arabic using modern standard Arabic (fus-ha). Encourage learning and be patient."<br>
+    &bull; English prompt: similar, but in English with child-friendly language.<br>
+    &bull; This pattern avoids training separate models per language &mdash; a single LLM is instructed bilingually via the system prompt.
+  </div>
+</div>
+
+<!-- 5.6 -->
+<div class="screenshot-placeholder">
+  <div style="font-size:1.4em;">&#x1F4F7; Screenshot Placeholder 6</div>
+  <div class="label">Summarization Strategy in MemoryManager</div>
+  <div style="margin-top:12px; text-align:left; font-size:0.85em; max-width:500px; margin-left:auto; margin-right:auto;">
+    <strong>Educational Focus:</strong><br>
+    &bull; Triggered when <code>message_count % window_size == 0</code> (e.g., every 20 messages).<br>
+    &bull; Full history is sent to the LLM with a meta-prompt: "Summarize the following conversation concisely."<br>
+    &bull; The summary is stored in both the <code>summaries</code> table and the <code>sessions.summary</code> column.<br>
+    &bull; On subsequent turns, the summary is injected into the system prompt, preserving long-term context without exceeding token limits.
+  </div>
+</div>
+
+<!-- 5.7 -->
+<div class="screenshot-placeholder">
+  <div style="font-size:1.4em;">&#x1F4F7; Screenshot Placeholder 7</div>
+  <div class="label">Main API Flow: <code>LLMModule.chat()</code></div>
+  <div style="margin-top:12px; text-align:left; font-size:0.85em; max-width:500px; margin-left:auto; margin-right:auto;">
+    <strong>Educational Focus:</strong><br>
+    &bull; End-to-end orchestration: language detection &rarr; system prompt &rarr; vision context &rarr; sliding window &rarr; API call &rarr; persistence &rarr; summarization check.<br>
+    &bull; Every step is logged for debugging; failures at any stage propagate as <code>LLMModuleError</code>.<br>
+    &bull; The method is designed to be stateless from the caller's perspective &mdash; all state is managed internally via the session_id.
+  </div>
+</div>
+
+<!-- 5.8 -->
+<div class="screenshot-placeholder">
+  <div style="font-size:1.4em;">&#x1F4F7; Screenshot Placeholder 8</div>
+  <div class="label">Database Schema &amp; Relationship Diagram</div>
+  <div style="margin-top:12px; text-align:left; font-size:0.85em; max-width:500px; margin-left:auto; margin-right:auto;">
+    <strong>Educational Focus:</strong><br>
+    &bull; Three-table schema with foreign keys: <code>messages.session_id &rarr; sessions.id</code>, <code>summaries.session_id &rarr; sessions.id</code>.<br>
+    &bull; Cascade delete ensures referential integrity.<br>
+    &bull; Timestamp columns enable chronological ordering and sliding window queries.
+  </div>
+</div>
+
+<!-- 5.9 -->
+<div class="screenshot-placeholder">
+  <div style="font-size:1.4em;">&#x1F4F7; Screenshot Placeholder 9</div>
+  <div class="label">Error Handling &amp; Exception Propagation</div>
+  <div style="margin-top:12px; text-align:left; font-size:0.85em; max-width:500px; margin-left:auto; margin-right:auto;">
+    <strong>Educational Focus:</strong><br>
+    &bull; All LLM-specific errors are wrapped in <code>LLMModuleError</code> with descriptive messages.<br>
+    &bull; Database errors (<code>sqlite3.OperationalError</code>) are caught and re-raised as <code>LLMModuleError</code>.<br>
+    &bull; Network errors (<code>requests.exceptions.*</code>) are caught in the retry loop; after exhausting retries, they are wrapped and raised.
+  </div>
+</div>
+
+<!-- 5.10 -->
+<div class="screenshot-placeholder">
+  <div style="font-size:1.4em;">&#x1F4F7; Screenshot Placeholder 10</div>
+  <div class="label">Connection Pooling &amp; Thread Safety</div>
+  <div style="margin-top:12px; text-align:left; font-size:0.85em; max-width:500px; margin-left:auto; margin-right:auto;">
+    <strong>Educational Focus:</strong><br>
+    &bull; <code>requests.Session()</code> is used at the module level for HTTP connection pooling &mdash; TCP connections are reused across requests to OpenRouter.<br>
+    &bull; SQLite connections are per-thread via <code>threading.local()</code>.<br>
+    &bull; WAL mode allows one writer + multiple readers concurrently &mdash; critical when the vision pipeline and voice pipeline may access session data simultaneously.
+  </div>
+</div>
+
+<!-- ===== 6. SEQUENCE FLOW ===== -->
+<h2>6. Sequence Flow — Complete Conversation Cycle</h2>
+
+<p>The following sequence describes a full user interaction from speech input to spoken response:</p>
+
+<div class="diagram" style="text-align:left; font-family:inherit; line-height:2.2;">
+  <ol style="margin:0 0 0 20px;">
+    <li><strong>User speaks</strong> &rarr; Microphone captures audio.</li>
+    <li><strong>ASR Module</strong> converts speech to text (e.g., Google Speech Recognition or Vosk).</li>
+    <li><strong>Vision Pipeline</strong> (run in parallel or sequentially) produces <code>vision_context</code> dict with face, gesture, emotion, objects, obstacles.</li>
+    <li><strong>Controller</strong> calls <code>llm_module.chat(session_id, user_text, vision_context)</code>.</li>
+    <li><strong>LLMModule.chat()</strong>:
+      <ul>
+        <li>Retrieves session language from SessionManager.</li>
+        <li>Constructs system prompt (Arabic or English) + appends stored summary if any.</li>
+        <li>Calls <code>build_vision_prompt()</code> to augment user message.</li>
+        <li>Retrieves sliding window (last N messages).</li>
+        <li>Sends <code>[system, history..., user]</code> to OpenRouterConnection.chat().</li>
+      </ul>
+    </li>
+    <li><strong>OpenRouterConnection</strong> POSTs to <code>https://openrouter.ai/api/v1/chat/completions</code> with retry logic.</li>
+    <li><strong>OpenRouter API</strong> forwards to configured LLM (e.g., GPT-4o), returns response JSON.</li>
+    <li><strong>LLMModule.chat()</strong>:
+      <ul>
+        <li>Stores user message and assistant response via SessionManager.add_message().</li>
+        <li>Checks MemoryManager.should_summarize(); triggers summarization if needed.</li>
+        <li>Returns assistant response text.</li>
+      </ul>
+    </li>
+    <li><strong>Controller</strong> passes response text to <strong>TTS Engine</strong> (e.g., pyttsx3 or gTTS).</li>
+    <li><strong>TTS Engine</strong> synthesizes speech &rarr; Speaker outputs audio.</li>
+  </ol>
+</div>
+
+<div class="note">
+  <strong>End-to-End Latency:</strong> Typically 1–3 seconds for the LLM API call (depending on model), plus ASR (~200ms) and TTS (~300ms). Total response time &lt; 4 seconds is acceptable for conversational robots.
+</div>
+
+<!-- ===== 7. FOLDER INTEGRATION ===== -->
+<h2>7. Folder Integration — How the LLM Module Connects</h2>
+
+<h3>7.1 Voice Pipeline Integration</h3>
+<p>The ASR module produces a plain-text <code>user_message</code>. The LLM module receives this text and returns a response string that is fed directly to the TTS engine. No audio processing happens within <code>llm/</code>.</p>
+
+<h3>7.2 Vision Pipeline Integration</h3>
+<p>The vision pipeline runs concurrently with ASR. It produces a <code>vision_context</code> dictionary with the following structure:</p>
+<pre><code>{
+    "face": True,              # Whether a face is detected
+    "gesture": "waving",       # Detected gesture (or None)
+    "emotion": "happy",        # Detected emotion (or None)
+    "objects": ["book", "ball"],   # List of detected objects
+    "obstacles": ["chair"]         # List of detected obstacles
+}</code></pre>
+<p>This is passed to <code>LLMModule.chat()</code> as the <code>vision_context</code> parameter. The module's <code>build_vision_prompt()</code> converts it to a textual prefix in Arabic, enabling the LLM to respond with awareness of the robot's physical environment.</p>
+
+<h3>7.3 Configuration Integration</h3>
+<p>The <code>backend</code> dict passed to <code>LLMModule.__init__()</code> is populated from the application's configuration system (e.g., <code>config.json</code> or <code>settings.py</code>). Expected keys:</p>
+<table>
+  <thead><tr><th>Key</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
+  <tbody>
+    <tr><td><code>api_key</code></td><td>str</td><td>&mdash;</td><td>OpenRouter API key</td></tr>
+    <tr><td><code>model</code></td><td>str</td><td><code>"openai/gpt-4o"</code></td><td>LLM model identifier</td></tr>
+    <tr><td><code>chat_timeout</code></td><td>int</td><td><code>30</code></td><td>Timeout (seconds) for chat requests</td></tr>
+    <tr><td><code>availability_timeout</code></td><td>int</td><td><code>5</code></td><td>Timeout for availability checks</td></tr>
+    <tr><td><code>window_size</code></td><td>int</td><td><code>20</code></td><td>Messages before summarization triggers</td></tr>
+    <tr><td><code>db_path</code></td><td>str</td><td><code>"sessions.db"</code></td><td>Path to SQLite database file</td></tr>
+  </tbody>
+</table>
+
+<!-- ===== 8. TECHNICAL NOTES ===== -->
+<h2>8. Technical Notes</h2>
+
+<table>
+  <thead><tr><th>Topic</th><th>Details</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><strong>requests Library</strong></td>
+      <td>All HTTP communication uses the <code>requests</code> library with session-level connection pooling. Headers include <code>Authorization: Bearer &lt;key&gt;</code>, <code>Content-Type: application/json</code>, and optionally <code>HTTP-Referer</code> for OpenRouter ranking. Timeouts are mandatory; connection timeouts prevent indefinite hangs.</td>
+    </tr>
+    <tr>
+      <td><strong>SQLite</strong></td>
+      <td>Local database stored on the robot's filesystem. WAL mode enables concurrent reads while writing. Thread-local connections (<code>threading.local()</code>) prevent SQLite's single-writer restriction from causing deadlocks. Foreign keys enabled for referential integrity. Autocommit mode (<code>isolation_level=None</code>) ensures each INSERT/UPDATE is immediately persisted.</td>
+    </tr>
+    <tr>
+      <td><strong>OpenRouter API</strong></td>
+      <td>Acts as a unified gateway to multiple LLM providers. The module sends standard OpenAI-format messages. The API key is stored in the application config (never hard-coded). The model parameter can point to any OpenRouter-supported model (GPT-4o, Claude 3.5, Gemini 1.5, DeepSeek V3, etc.).</td>
+    </tr>
+    <tr>
+      <td><strong>Retry Pattern</strong></td>
+      <td>Exponential backoff: 1s &rarr; 2s &rarr; 4s &rarr; raise. Only retries on 429 (rate limit) and 5xx (server errors). Uses <code>time.sleep()</code> between attempts. Maximum 3 attempts total. This pattern balances responsiveness with API reliability.</td>
+    </tr>
+    <tr>
+      <td><strong>Sliding Window</strong></td>
+      <td>Only the most recent N messages (default 20) are included in each API request. This prevents token overflow and reduces latency. Older messages are not lost—they are condensed via summarization and included in the system prompt.</td>
+    </tr>
+    <tr>
+      <td><strong>Thread Safety</strong></td>
+      <td>SQLite connections are thread-local; each thread opens its own connection. The <code>threading.local()</code> storage ensures isolation. The <code>requests.Session</code> is shared across threads (thread-safe for sending requests). Summarization is idempotent; concurrent summarization requests from the same session are safe because SQLite serializes writes.</td>
+    </tr>
+  </tbody>
+</table>
+
+<!-- ===== 9. ACADEMIC EXPLANATION ===== -->
+<h2>9. Academic Explanation — Design Rationale</h2>
+
+<h3>9.1 Design Rationale</h3>
+<p>The LLM module was designed with four primary constraints:</p>
+<ol>
+  <li><strong>Resource Constraints:</strong> The robot runs on a single-board computer (e.g., Raspberry Pi or Jetson Nano) with limited RAM and no GPU. Running even a small LLM locally is infeasible. The remote-API architecture offloads computation to cloud servers while keeping the local footprint minimal (~50 KB for the module code plus SQLite).</li>
+  <li><strong>Real-Time Interaction:</strong> Educational robots must respond within 2–4 seconds to maintain natural conversation flow. The module achieves this through aggressive timeouts (30s for chat, 5s for health checks), connection pooling, and a lightweight sliding-window approach that minimizes API payload size.</li>
+  <li><strong>Bilingual Support:</strong> The target environment (Saudi Arabian classrooms) requires fluent Arabic and English. Rather than maintaining separate models or fine-tuning, the module uses a single multilingual LLM with language-specific system prompts. This is a cost-effective, maintainable approach that leverages the LLM's inherent multilingual capabilities.</li>
+  <li><strong>Persistence &amp; Context Awareness:</strong> Students may interact with the robot over multiple sessions across days or weeks. SQLite provides durable, queryable storage. The summarization mechanism preserves long-term context (student name, progress, learning goals) while keeping API requests within token limits.</li>
+</ol>
+
+<h3>9.2 Offline Fallback</h3>
+<p>The module currently requires an internet connection for OpenRouter API calls. An offline fallback could be implemented by:</p>
+<ul>
+  <li>Pre-defining a set of rule-based response templates for common questions.</li>
+  <li>Caching recent responses for offline replay.</li>
+  <li>Integrating a smaller on-device model (e.g., Llama.cpp or GPT4All) when network is unavailable.</li>
+</ul>
+<p>The architecture is designed to accommodate such a fallback: <code>LLMModule.chat()</code> could be extended to check connectivity first, and if <code>is_ready()</code> returns <code>False</code>, fall back to a local response generator that implements the same interface.</p>
+
+<h3>9.3 Scalability</h3>
+<p>The current architecture supports single-robot deployment. Key scalability considerations:</p>
+<ul>
+  <li><strong>Multi-Robot:</strong> Each robot has its own SQLite database and API key. No shared state. Scaling to hundreds of robots requires no changes to the module itself—only the API rate limits would need monitoring.</li>
+  <li><strong>Database Growth:</strong> The sliding window prevents unbounded growth in API payloads, but the SQLite database will grow over time. A periodic archival job (e.g., delete sessions older than 30 days) or automatic cleanup could be added.</li>
+  <li><strong>Rate Limiting:</strong> OpenRouter imposes rate limits per API key. The exponential backoff retry logic mitigates transient rate-limit errors. For high-throughput scenarios, multiple API keys with round-robin distribution could be used.</li>
+</ul>
+
+<h3>9.4 Future Improvements</h3>
+<table>
+  <thead><tr><th>Improvement</th><th>Description</th><th>Priority</th></tr></thead>
+  <tbody>
+    <tr>
+      <td>Streaming Responses</td>
+      <td>Use Server-Sent Events (SSE) to stream LLM responses token-by-token, enabling the robot to start speaking before the full response is ready (reduces perceived latency).</td>
+      <td>High</td>
+    </tr>
+    <tr>
+      <td>Multi-Turn Summarization</td>
+      <td>Hierarchical summarization: recent conversations summarized at finer granularity, older conversations at coarser granularity (like the "memories" pattern in MemGPT/Letta).</td>
+      <td>Medium</td>
+    </tr>
+    <tr>
+      <td>Sentiment-Active Responses</td>
+      <td>Use the vision pipeline's emotion data to dynamically adjust the tone of the response (e.g., more encouraging if the student appears frustrated).</td>
+      <td>Medium</td>
+    </tr>
+    <tr>
+      <td>Tool Calling / Function Calling</td>
+      <td>Enable the LLM to call functions (e.g., "move forward", "play sound", "show image on screen") for richer multimodal interaction.</td>
+      <td>Medium</td>
+    </tr>
+    <tr>
+      <td>Caching Layer</td>
+      <td>Cache frequent API responses (e.g., greetings, common Q&amp;A) in SQLite to reduce API costs and latency.</td>
+      <td>Low</td>
+    </tr>
+    <tr>
+      <td>Local Fallback LLM</td>
+      <td>Integrate a quantized local model (e.g., Phi-3-mini or Llama-3.2-1B via Ollama) for offline operation with degraded but functional responses.</td>
+      <td>High</td>
+    </tr>
+  </tbody>
+</table>
+
+<h3>9.5 Conclusion</h3>
+<p>
+The <code>llm/</code> module provides a robust, production-ready conversational AI interface for the Rope educational robot. By combining remote LLM access via OpenRouter with local SQLite persistence, thread-safe connection management, bilingual system prompts, and sliding-window memory with automatic summarization, it delivers natural, context-aware interaction within the resource constraints of embedded hardware. The architecture is modular, testable, and designed for future extension—including streaming, offline fallback, and tool calling.
+</p>
+
+<div class="warn" style="margin-top:40px;">
+  <strong>Documentation Maintainer:</strong> This document is part of the Rope graduation project. For questions or updates, contact the project lead. Source code and issue tracking are available in the project repository.
+</div>
+
+<div style="text-align:center; margin-top:40px; padding-top:20px; border-top:1px solid #ddd; color:#888; font-size:0.8em;">
+  &copy; 2026 Rope Project Team &mdash; Generated from source code analysis. All trademarks belong to their respective owners.
+</div>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,390 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Remote Shutdown System Documentation</title>
+<style>
+  @page { size: A4; margin: 20mm 18mm; }
+  * { box-sizing: border-box; }
+  body {
+    font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    line-height: 1.65;
+    color: #1e1e2e;
+    max-width: 820px;
+    margin: 0 auto;
+    padding: 2rem 1.5rem;
+    background: #fff;
+  }
+  h1 { font-size: 2rem; border-bottom: 3px solid #e03131; padding-bottom: 0.4rem; margin-top: 0; }
+  h2 { font-size: 1.45rem; color: #c92a2a; margin-top: 2.2rem; border-left: 4px solid #e03131; padding-left: 0.65rem; }
+  h3 { font-size: 1.15rem; color: #2b2b3b; margin-top: 1.6rem; }
+  a { color: #c92a2a; }
+  table { width: 100%; border-collapse: collapse; margin: 1.2rem 0; font-size: 0.92rem; }
+  th, td { border: 1px solid #bbb; padding: 0.45rem 0.65rem; text-align: left; }
+  th { background: #f5f5f5; font-weight: 600; }
+  code { background: #f0f0f3; padding: 0.1rem 0.35rem; border-radius: 3px; font-size: 0.88em; }
+  pre {
+    background: #1e1e2e; color: #cdd6f4; padding: 0.9rem 1.1rem; border-radius: 6px;
+    overflow-x: auto; font-size: 0.82rem; line-height: 1.5; tab-size: 4;
+  }
+  .screenshot-placeholder {
+    background: #e9ecef; border: 2px dashed #adb5bd; border-radius: 8px;
+    padding: 2.5rem 1rem; text-align: center; margin: 1.2rem 0;
+    color: #495057; font-style: italic;
+  }
+  .flow-diagram {
+    background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 8px;
+    padding: 1.5rem; margin: 1.5rem 0; text-align: center;
+    font-family: 'Consolas', 'Courier New', monospace; font-size: 0.9rem;
+    line-height: 2;
+  }
+  .flow-diagram .arrow { color: #e03131; font-weight: bold; }
+  .note { background: #fff3f3; border-left: 4px solid #e03131; padding: 0.7rem 1rem; margin: 1rem 0; border-radius: 0 6px 6px 0; font-size: 0.92rem; }
+  @media print { body { padding: 0; } .screenshot-placeholder { break-inside: avoid; } pre { break-inside: avoid; } }
+</style>
+</head>
+<body>
+
+<h1>Remote Shutdown System Documentation</h1>
+
+<p><strong>Project:</strong> Ropo &mdash; Remote Shutdown Subsystem<br>
+<strong>Folder:</strong> <code>shutdown/</code><br>
+<strong>Last updated:</strong> June 2026</p>
+
+<h2>1. Folder Purpose</h2>
+<p>
+The <code>shutdown/</code> folder provides a <strong>safe remote shutdown mechanism</strong> for the Ropo robot.
+It allows an operator to trigger a full system shutdown of the on-board Raspberry Pi through a mobile-friendly web interface,
+without requiring physical access to the robot. The architecture separates the control plane (cloud API) from the
+execution plane (on-device polling client), ensuring that even if the network is intermittent, the shutdown command
+will eventually be delivered.
+</p>
+
+<h2>2. Architecture Overview</h2>
+<div class="flow-diagram">
+  <span style="font-weight:700;color:#e03131;">Mobile App</span><br>
+  <span class="arrow">&amp;#9660; POST /shutdown</span><br>
+  <span style="font-weight:700;">Railway Cloud</span> <span style="font-size:0.8rem;">(FastAPI)</span><br>
+  <span class="arrow">&amp;#9660; sets <code>shutdown_requested = true</code></span><br>
+  <span style="font-weight:700;">Raspberry Pi</span> <span style="font-size:0.8rem;">(polls GET /shutdown-status every 15s)</span><br>
+  <span class="arrow">&amp;#9660; detects <code>shutdown == true</code></span><br>
+  <span style="font-weight:700;">sudo shutdown -h now</span>
+</div>
+
+<p>The system consists of three tiers:</p>
+<ol>
+  <li><strong>Cloud API</strong> &mdash; a FastAPI application deployed on Railway that exposes a REST endpoint to request a shutdown, protected by a shared bearer token.</li>
+  <li><strong>Polling Client</strong> &mdash; a Python script running on the Raspberry Pi that continuously polls the API every 15 seconds and executes the system shutdown command when instructed.</li>
+  <li><strong>systemd Service</strong> &mdash; ensures the polling client starts at boot and restarts automatically on failure.</li>
+</ol>
+
+<div class="note">
+  <strong>Key design decision:</strong> The system uses <em>polling</em> (client-initiated) rather than push notifications
+  so the Raspberry Pi never needs to expose an open port. This eliminates a major attack surface and simplifies
+  firewall / NAT traversal requirements when the robot operates on customer networks.
+</div>
+
+<h2>3. Files Overview</h2>
+<table>
+<thead>
+<tr><th>File</th><th>Role</th><th>Key Details</th></tr>
+</thead>
+<tbody>
+<tr>
+  <td><code>main.py</code></td>
+  <td>FastAPI backend (165 lines)</td>
+  <td>REST API, embedded HTML dashboard, token auth, in-memory state</td>
+</tr>
+<tr>
+  <td><code>robot_shutdown_client.py</code></td>
+  <td>RPi polling daemon (72 lines)</td>
+  <td>15s poll loop, never-crash design, auto-reset + shutdown</td>
+</tr>
+<tr>
+  <td><code>ropo-shutdown.service</code></td>
+  <td>systemd unit file</td>
+  <td>Runs as root, auto-restart, loads <code>/etc/ropo-shutdown.env</code></td>
+</tr>
+<tr>
+  <td><code>requirements.txt</code></td>
+  <td>Python dependencies</td>
+  <td><code>fastapi</code>, <code>uvicorn</code>, <code>python-dotenv</code></td>
+</tr>
+<tr>
+  <td><code>README.md</code></td>
+  <td>Quick-start guide</td>
+  <td>Setup, environment variables, deployment instructions</td>
+</tr>
+<tr>
+  <td><code>__init__.py</code></td>
+  <td>Package marker</td>
+  <td>Empty &mdash; enables Python package imports</td>
+</tr>
+</tbody>
+</table>
+
+<h2>4. Detailed File Explanations</h2>
+
+<h3>4.1 &mdash; <code>main.py</code> &mdash; FastAPI Backend</h3>
+<p>The backend exposes three REST endpoints and serves a self-contained HTML dashboard:</p>
+
+<table>
+<thead><tr><th>Endpoint</th><th>Method</th><th>Description</th></tr></thead>
+<tbody>
+<tr><td><code>/</code></td><td>GET</td><td>Returns the HTML dashboard page (<code>text/html</code>)</td></tr>
+<tr><td><code>/shutdown-status</code></td><td>GET</td><td>Returns <code>{"shutdown": true|false}</code> &mdash; the current state</td></tr>
+<tr><td><code>/shutdown</code></td><td>POST</td><td>Accepts <code>{"token": "..."}</code>; sets <code>shutdown_requested = true</code></td></tr>
+<tr><td><code>/shutdown-reset</code></td><td>POST</td><td>Accepts <code>{"token": "..."}</code>; resets state to <code>false</code></td></tr>
+</tbody>
+</table>
+
+<p><strong>Token validation:</strong> The <code>SHUTDOWN_TOKEN</code> environment variable is loaded via <code>python-dotenv</code>
+and compared against the <code>token</code> field of incoming POST requests. If they do not match, the server returns
+HTTP 403 &mdash; <em>Unauthorized</em>. This shared secret prevents unauthorised actors from triggering a shutdown.</p>
+
+<p><strong>In-memory state:</strong> A module-level global variable <code>shutdown_requested</code> holds the current
+shutdown flag. It starts as <code>False</code>, is set to <code>True</code> via <code>POST /shutdown</code>, and is
+reset by the client after it reads the flag. This approach is intentionally simple &mdash; no database, no Redis &mdash;
+because the flag is ephemeral and the polling window (15 seconds) is short enough that a single in-memory boolean
+suffices for a single-robot deployment.</p>
+
+<h3>4.2 &mdash; HTML Dashboard</h3>
+<p>The dashboard is embedded directly inside <code>main.py</code> as a raw Python string rendered at <code>GET /</code>.
+Key features:</p>
+<ul>
+  <li><strong>Dark theme</strong> &mdash; professional, low-glare UI suitable for mobile use in varied lighting.</li>
+  <li><strong>Token input field</strong> &mdash; the operator enters the shared secret before issuing commands.</li>
+  <li><strong>Status indicator</strong> &mdash; a coloured badge (green/red) showing whether shutdown has been requested.</li>
+  <li><strong>Shutdown / Reset buttons</strong> &mdash; send POST requests with the entered token to the respective endpoints.</li>
+  <li><strong>5-second polling</strong> &mdash; the dashboard auto-refreshes the status via <code>fetch('/shutdown-status')</code>
+  every 5 seconds, providing near-real-time feedback after a client action.</li>
+</ul>
+<p>By bundling the front-end inside the backend, the system eliminates the need for a separate web server, CORS
+configuration, or deployment artefact for the UI &mdash; a single <code>uvicorn</code> process serves everything.</p>
+
+<h3>4.3 &mdash; <code>robot_shutdown_client.py</code> &mdash; Polling Client</h3>
+<p>This script runs continuously on the Raspberry Pi and implements a <strong>never-crash</strong> polling loop:</p>
+<pre>
+while True:
+    try:
+        resp = requests.get(url + "/shutdown-status", timeout=10)
+        if resp.json().get("shutdown"):
+            requests.post(url + "/shutdown-reset", json={"token": token})
+            subprocess.run(["sudo", "shutdown", "-h", "now"])
+    except Exception:
+        pass                          # log and continue
+    time.sleep(15)
+</pre>
+<p>Critical design properties:</p>
+<ul>
+  <li><strong>Graceful error handling</strong> &mdash; every network error, timeout, or malformed response is caught by the
+  blanket <code>except Exception</code> handler. The client logs the error and retries on the next cycle. It never exits.</li>
+  <li><strong>Reset-before-shutdown</strong> &mdash; before issuing the system shutdown command, the client first calls
+  <code>/shutdown-reset</code> to clear the flag. This prevents a second (duplicate) poll cycle from attempting another
+  shutdown and ensures the API returns to its idle state for the next command.</li>
+  <li><strong>Configuration</strong> &mdash; the API base URL and shutdown token are read from environment variables
+  (<code>API_URL</code>, <code>SHUTDOWN_TOKEN</code>), matching the systemd <code>EnvironmentFile</code>.</li>
+</ul>
+
+<h3>4.4 &mdash; <code>ropo-shutdown.service</code> &mdash; systemd Unit</h3>
+<table>
+<thead><tr><th>Directive</th><th>Value</th><th>Purpose</th></tr></thead>
+<tbody>
+<tr><td><code>After</code></td><td><code>network-online.target</code></td><td>Wait for full network connectivity before starting</td></tr>
+<tr><td><code>ExecStart</code></td><td><code>/usr/bin/python3 /opt/ropo-shutdown/robot_shutdown_client.py</code></td><td>Command to launch the polling client</td></tr>
+<tr><td><code>Restart</code></td><td><code>always</code></td><td>Automatically restart if the process exits or crashes</td></tr>
+<tr><td><code>RestartSec</code></td><td><code>5</code></td><td>Wait 5 seconds before restarting</td></tr>
+<tr><td><code>User</code></td><td><code>root</code></td><td>Required to execute <code>sudo shutdown</code></td></tr>
+<tr><td><code>EnvironmentFile</code></td><td><code>/etc/ropo-shutdown.env</code></td><td>Load <code>API_URL</code> and <code>SHUTDOWN_TOKEN</code></td></tr>
+</tbody>
+</table>
+
+<p>The unit file is designed to be placed at <code>/etc/systemd/system/ropo-shutdown.service</code> on the Raspberry Pi.
+After installation, the service is enabled with <code>systemctl enable ropo-shutdown.service</code> so it starts
+automatically at boot.</p>
+
+<h2>5. Code Walkthrough</h2>
+
+<div class="screenshot-placeholder">
+  <strong>Screenshot 1:</strong> FastAPI endpoints &mdash; <code>request_shutdown</code> and <code>reset_shutdown</code><br>
+  <span style="font-size:0.85rem;">Both validate the token, then toggle the global <code>shutdown_requested</code> boolean.</span>
+</div>
+
+<div class="screenshot-placeholder">
+  <strong>Screenshot 2:</strong> Embedded HTML dashboard &mdash; token form, status badge, Shutdown / Reset buttons<br>
+  <span style="font-size:0.85rem;">The dark-themed UI with the 5-second polling loop using <code>setInterval</code>.</span>
+</div>
+
+<div class="screenshot-placeholder">
+  <strong>Screenshot 3:</strong> Polling client main loop &mdash; GET /shutdown-status, reset, execute shutdown<br>
+  <span style="font-size:0.85rem;">The never-crash <code>while True</code> pattern with blanket exception handling.</span>
+</div>
+
+<div class="screenshot-placeholder">
+  <strong>Screenshot 4:</strong> systemd unit file &mdash; <code>ropo-shutdown.service</code><br>
+  <span style="font-size:0.85rem;">Restart policy, environment file loading, and root user execution.</span>
+</div>
+
+<div class="screenshot-placeholder">
+  <strong>Screenshot 5:</strong> Railway deployment &mdash; environment variables configuration<br>
+  <span style="font-size:0.85rem;">Setting <code>SHUTDOWN_TOKEN</code> and the start command <code>uvicorn main:app</code>.</span>
+</div>
+
+<div class="screenshot-placeholder">
+  <strong>Screenshot 6:</strong> End-to-end test &mdash; mobile app view showing shutdown confirmed<br>
+  <span style="font-size:0.85rem;">The dashboard showing &quot;Shutdown Requested&quot; after a successful POST.</span>
+</div>
+
+<h2>6. Sequence Flow</h2>
+<div class="flow-diagram" style="text-align:left;padding:1rem 2rem;font-size:0.85rem;">
+  <strong>Operator (Mobile App)</strong><br>
+  <span style="padding-left:0.5rem;">1. Opens dashboard URL<br>2. Enters token<br>3. Clicks SHUTDOWN</span><br><br>
+  <span class="arrow">&amp;#8595;</span> <code>POST /shutdown  {token: "..."}</code><br><br>
+  <strong>FastAPI (Railway)</strong><br>
+  <span style="padding-left:0.5rem;">4. Validates token<br>5. Sets <code>shutdown_requested = True</code><br>6. Returns <code>{"ok": true}</code></span><br><br>
+  <span class="arrow">&amp;#8595;</span> <code>200 OK</code><br><br>
+  <strong>Client (RPi &mdash; polls every 15 s)</strong><br>
+  <span style="padding-left:0.5rem;">7. <code>GET /shutdown-status</code> &rarr; <code>{shutdown: true}</code><br>8. <code>POST /shutdown-reset</code> (clear flag)<br>9. <code>subprocess.run(["sudo", "shutdown", "-h", "now"])</code></span><br><br>
+  <span class="arrow">&amp;#8595;</span><br><br>
+  <strong>Raspberry Pi</strong><br>
+  <span style="padding-left:0.5rem;">10. System halts &rarr; power-off</span>
+</div>
+
+<div class="note">
+  <strong>Safety detail:</strong> The reset-before-shutdown pattern (step 8) is essential. If the client instead shut down
+  without resetting, the next API poll would see <code>shutdown: true</code> again &mdash; but the system would already
+  be powering off, making the duplicate harmless. More importantly, resetting <em>first</em> means that if the shutdown
+  command itself fails (e.g., insufficient privileges), the system returns to a safe idle state rather than remaining
+  in a perpetual &quot;shutdown requested&quot; condition.
+</div>
+
+<h2>7. Folder Integration</h2>
+<p>
+The <code>shutdown/</code> folder is a <strong>self-contained, isolated subsystem</strong> within the Ropo project.
+None of the existing Ropo modules are modified or depend on it. The integration points are purely operational:
+</p>
+<ul>
+  <li><strong>Deployment:</strong> The <code>main.py</code> API is deployed separately on Railway as its own service.</li>
+  <li><strong>Configuration:</strong> The Raspberry Pi reads <code>/etc/ropo-shutdown.env</code> &mdash; a file created
+  during initial setup, not managed by the Ropo build system.</li>
+  <li><strong>Orchestration:</strong> The systemd unit file is installed manually (or via Ansible) on the target Pi.
+  It is independent of the robot's main application lifecycle.</li>
+</ul>
+<p>This decoupling means the shutdown system can be developed, tested, and deployed independently. A
+failure in the shutdown module (e.g., the API is unreachable) has zero impact on the robot's core functionality.</p>
+
+<h2>8. Technical Notes</h2>
+
+<table>
+<thead><tr><th>Area</th><th>Details</th></tr></thead>
+<tbody>
+<tr>
+  <td><strong>Framework</strong></td>
+  <td>FastAPI &mdash; chosen for async support, automatic OpenAPI docs, and lightweight deployment via Uvicorn.
+  The API runs as a single process with no external database.</td>
+</tr>
+<tr>
+  <td><strong>Deployment</strong></td>
+  <td>Railway.app &mdash; the service is deployed as a container from a GitHub-connected repository.
+  The start command is <code>uvicorn main:app --host 0.0.0.0 --port 8080</code>.
+  <code>SHUTDOWN_TOKEN</code> is set in Railway's environment variable dashboard.</td>
+</tr>
+<tr>
+  <td><strong>Polling interval</strong></td>
+  <td>15 seconds &mdash; balances responsiveness with network and CPU overhead. The client uses
+  <code>time.sleep(15)</code> between cycles, so the effective interval is 15 s plus the API round-trip time
+  (typically &lt; 500 ms).</td>
+</tr>
+<tr>
+  <td><strong>Security</strong></td>
+  <td>Single shared token transmitted over HTTPS. No TLS termination at the application layer &mdash;
+  Railway provides HTTPS at the edge. The token should be a high-entropy string (recommended: 32+ random
+  characters generated via <code>openssl rand -hex 32</code>).</td>
+</tr>
+<tr>
+  <td><strong>Resilience</strong></td>
+  <td>The polling client and systemd unit together provide a robust &quot;set and forget&quot; daemon.
+  If the API is temporarily down, the client logs the error and retries. If the client process crashes,
+  systemd restarts it within 5 seconds.</td>
+</tr>
+</tbody>
+</table>
+
+<h2>9. Academic Explanation</h2>
+
+<h3>9.1 &mdash; Remote Control Design Pattern</h3>
+<p>
+The remote shutdown system follows the <strong>Command</strong> design pattern applied at the system-administration
+level. A command object (the shutdown request) is created by the operator, serialised as an HTTP POST payload,
+transmitted over the network, and finally executed by the Raspberry Pi. The state is intentionally ephemeral
+&mdash; once the command has been consumed, the flag is cleared &mdash; making this an <em>execute-once</em>
+remote procedure call rather than a persistent state machine.
+</p>
+
+<h3>9.2 &mdash; Polling vs. Push</h3>
+<p>
+Two fundamental approaches exist for remote device control:
+</p>
+<ul>
+  <li><strong>Push (WebSocket, MQTT, gRPC stream):</strong> The server initiates communication and sends commands
+  as soon as they are issued. This provides lower latency but requires the device to maintain an open connection
+  and listen on a port or connect to a broker. On a customer's local network, firewalls and NAT may prevent
+  inbound connections.</li>
+  <li><strong>Polling (HTTP Pull):</strong> The device periodically checks a well-known URL for new commands.
+  This adds latency proportional to the polling interval (here, up to 15 seconds) but eliminates the need for
+  inbound ports or persistent connections. It is simpler, more robust in the presence of network interruptions,
+  and easier to debug.</li>
+</ul>
+<p>The polling approach was chosen for this system because reliability and security across heterogeneous customer
+networks were prioritised over sub-second response time. A 15-second shutdown delay is acceptable for a
+safety-critical remote shutdown.</p>
+
+<h3>9.3 &mdash; Security via Shared Token</h3>
+<p>
+The system employs a <strong>pre-shared key</strong> (PSK) authentication model &mdash; the simplest form of
+symmetric authentication. Both the API server and the polling client know the same secret token. The operator
+provides it through the web dashboard; the client embeds it in its reset request. Security relies on:
+</p>
+<ul>
+  <li><strong>Secrecy:</strong> The token is never logged, never sent over unencrypted connections (HTTPS enforced
+  by Railway), and is stored in a restricted <code>EnvironmentFile</code> on the Pi.</li>
+  <li><strong>Entropy:</strong> A sufficiently long random token (256 bits) makes brute-force attacks infeasible
+  within the rate-limited context of a single FastAPI instance.</li>
+  <li><strong>No session management:</strong> Because the system has no user accounts or session cookies, the
+  attack surface is limited to token leakage or replay. HTTPS and short polling intervals minimise the window
+  of vulnerability.</li>
+</ul>
+
+<h3>9.4 &mdash; Safety Considerations</h3>
+<p>
+Remote shutdown carries inherent risk: an accidental trigger could halt the robot during operation, potentially
+causing data loss or unsafe physical states. The system mitigates this through:
+</p>
+<ul>
+  <li><strong>Token gating:</strong> Only an operator who knows the token can issue a shutdown.</li>
+  <li><strong>Reset-before-shutdown:</strong> The client clears the flag before executing the system halt,
+  ensuring that a single trigger corresponds to a single shutdown action.</li>
+  <li><strong>Polling delay:</strong> The 15-second window gives the operator an opportunity to reset the flag
+  via the dashboard if the shutdown was issued in error, before the client reads it.</li>
+  <li><strong>Degraded behaviour:</strong> If the API is unreachable, the client does nothing &mdash; it never
+  assumes a shutdown should occur. The system defaults to <em>not</em> shutting down.</li>
+</ul>
+
+<h2>10. Conclusion</h2>
+<p>
+The Remote Shutdown System is a lightweight, secure, and resilient mechanism for powering off the Ropo robot
+from a remote location. By combining a cloud-hosted FastAPI endpoint with an on-device polling client managed
+by systemd, the system achieves a clean separation of concerns: the API handles authorisation and state, while
+the client handles reliable delivery and execution. The architecture is deliberately simple (a single boolean,
+a shared token, a 15-second poll loop) because complexity is the enemy of reliability in safety-critical
+control paths. The result is a production-ready subsystem that can be deployed in minutes and trusted to
+operate unattended for months at a time.
+</p>
+
+<p style="margin-top:2rem;color:#888;font-size:0.85rem;text-align:center;">
+&mdash; End of Document &mdash;
+</p>
+
+</body>
+</html>

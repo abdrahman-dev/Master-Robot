@@ -4,6 +4,10 @@ pyserial>=3.5
 requests>=2.31.0
 python-dotenv>=1.0.0
 
+# Shutdown API (deployed separately on Railway)
+fastapi>=0.115.0
+uvicorn>=0.32.0
+
 # Voice Pipeline
 rapidfuzz>=3.0.0
 speechrecognition>=3.8.0
