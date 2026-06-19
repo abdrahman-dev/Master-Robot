@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import math
 import queue
 import random
 import threading
@@ -16,6 +17,20 @@ from config.settings import get_settings
 from voice import asr, tts, vad
 from voice.tts import TTSModule
 from llm.module import LLMModule, LLMModuleError
+
+
+def _compute_resample_ratio(orig_rate: int, target_rate: int) -> tuple[int, int]:
+    gcd = math.gcd(orig_rate, target_rate)
+    return target_rate // gcd, orig_rate // gcd
+
+
+def _resample_chunk(chunk: np.ndarray, orig_rate: int, target_rate: int) -> np.ndarray:
+    if orig_rate == target_rate:
+        return chunk
+    from scipy.signal import resample_poly
+    up, down = _compute_resample_ratio(orig_rate, target_rate)
+    resampled = resample_poly(chunk, up, down)
+    return resampled.astype(np.float32)
 
 FILLER_PHRASES = {
     "ar": [
@@ -328,6 +343,31 @@ class VoicePipeline:
             self._mic_available = False
             return
 
+        device_sample_rate = self._sample_rate
+        try:
+            device_info = sd.query_devices(sd.default.device[0], "input")
+            device_sample_rate = int(device_info["default_samplerate"])
+            logger.info(
+                "[pipeline] Device default samplerate: %d Hz (internal: %d Hz)",
+                device_sample_rate, self._sample_rate,
+            )
+        except Exception as exc:
+            logger.warning("[pipeline] Could not query device samplerate: %s — using %d Hz", exc, self._sample_rate)
+
+        needs_resample = device_sample_rate != self._sample_rate
+        device_chunk_size = int(device_sample_rate * _SETTINGS.vad.chunk_duration_ms / 1000)
+        if device_chunk_size <= 0:
+            device_chunk_size = 1024
+
+        self._resample_buffer = np.array([], dtype=np.float32)
+
+        if needs_resample:
+            up, down = _compute_resample_ratio(device_sample_rate, self._sample_rate)
+            logger.info(
+                "[pipeline] Resampling enabled: %d Hz → %d Hz (ratio=%d/%d)",
+                device_sample_rate, self._sample_rate, up, down,
+            )
+
         pre_buffer: Deque[bytes] = deque(maxlen=self._pre_chunks)
         segment_chunks: Optional[Deque[bytes]] = None
         silence_chunks = 0
@@ -347,44 +387,53 @@ class VoicePipeline:
             if self._ping_counter % 50 == 0 and self._watchdog_ping:
                 self._watchdog_ping()
 
-            chunk = np.asarray(indata[:, 0], dtype=np.float32)
-            speech_now = vad.is_speech(chunk)
-            chunk_bytes = float32_chunk_to_int16_bytes(chunk)
+            raw_chunk = np.asarray(indata[:, 0], dtype=np.float32)
+            if needs_resample:
+                raw_chunk = _resample_chunk(raw_chunk, device_sample_rate, self._sample_rate)
 
-            if segment_chunks is None:
+            self._resample_buffer = np.concatenate([self._resample_buffer, raw_chunk])
+
+            while len(self._resample_buffer) >= self._chunk_size:
+                chunk_16k = self._resample_buffer[:self._chunk_size]
+                self._resample_buffer = self._resample_buffer[self._chunk_size:]
+
+                speech_now = vad.is_speech(chunk_16k)
+                chunk_bytes = float32_chunk_to_int16_bytes(chunk_16k)
+
+                if segment_chunks is None:
+                    if speech_now:
+                        current_turn_id = self._next_turn_id()
+                        self._maybe_stop_tts_on_interrupt()
+                        if self._face_set_state:
+                            self._face_set_state("LISTENING")
+                        logger.info("[VAD] Speech detected (turn=%s)", current_turn_id)
+                        segment_chunks = deque(pre_buffer)
+                        segment_chunks.append(chunk_bytes)
+                        speech_chunks = 1
+                        silence_chunks = 0
+                        pre_buffer.clear()
+                    else:
+                        pre_buffer.append(chunk_bytes)
+                    continue
+
+                assert current_turn_id is not None
+                segment_chunks.append(chunk_bytes)
+                speech_chunks += 1
                 if speech_now:
-                    current_turn_id = self._next_turn_id()
-                    self._maybe_stop_tts_on_interrupt()
-                    if self._face_set_state:
-                        self._face_set_state("LISTENING")
-                    logger.info("[VAD] Speech detected (turn=%s)", current_turn_id)
-                    segment_chunks = deque(pre_buffer)
-                    segment_chunks.append(chunk_bytes)
-                    speech_chunks = 1
                     silence_chunks = 0
-                    pre_buffer.clear()
                 else:
-                    pre_buffer.append(chunk_bytes)
-                return
-
-            assert current_turn_id is not None
-            segment_chunks.append(chunk_bytes)
-            speech_chunks += 1
-            if speech_now:
-                silence_chunks = 0
-            else:
-                silence_chunks += 1
-            if (silence_chunks >= self._silence_timeout_chunks
-                    and speech_chunks >= self._min_speech_chunks):
-                audio_chunks = list(segment_chunks)
-                finished_turn_id = current_turn_id
-                segment_chunks = None
-                silence_chunks = 0
-                speech_chunks = 0
-                current_turn_id = None
-                logger.info("[VAD] Segment ended (turn=%s, chunks=%d)",
-                             finished_turn_id, len(audio_chunks))
-                self._enqueue_segment(Segment(turn_id=finished_turn_id, audio_chunks=audio_chunks))
+                    silence_chunks += 1
+                if (silence_chunks >= self._silence_timeout_chunks
+                        and speech_chunks >= self._min_speech_chunks):
+                    audio_chunks = list(segment_chunks)
+                    finished_turn_id = current_turn_id
+                    segment_chunks = None
+                    silence_chunks = 0
+                    speech_chunks = 0
+                    current_turn_id = None
+                    logger.info("[VAD] Segment ended (turn=%s, chunks=%d)",
+                                finished_turn_id, len(audio_chunks))
+                    self._enqueue_segment(Segment(turn_id=finished_turn_id, audio_chunks=audio_chunks))
 
         if self._face_set_state:
             self._face_set_state("IDLE")
@@ -392,10 +441,10 @@ class VoicePipeline:
 
         try:
             with sd.InputStream(
-                samplerate=self._sample_rate,
+                samplerate=device_sample_rate if needs_resample else self._sample_rate,
                 channels=1,
                 dtype="float32",
-                blocksize=self._chunk_size,
+                blocksize=device_chunk_size,
                 callback=callback,
             ):
                 while self._running:
@@ -405,6 +454,8 @@ class VoicePipeline:
             self._mic_available = False
         except Exception as e:
             logger.error("[pipeline] Stream error: %s", e, exc_info=True)
+        finally:
+            self._resample_buffer = np.array([], dtype=np.float32)
 
         logger.info("[pipeline] Audio stream closed")
 

@@ -16,6 +16,7 @@ An interactive educational robot with a conversational voice pipeline and an ani
 - **Session Memory** — SQLite-backed conversation history with sliding window and summarization
 - **Filler Phrases** — Natural-sounding filler phrases in Arabic and English while the LLM processes
 - **Offline Fallback** — Graceful degradation when OpenRouter is unreachable
+- **Remote Shutdown** — FastAPI-based remote shutdown system with web dashboard and Raspberry Pi polling client
 
 ## Current Status
 
@@ -30,6 +31,7 @@ An interactive educational robot with a conversational voice pipeline and an ani
 | Vision Pipeline (YOLO + Face + Gesture) | ✅ شغال على Desktop |
 | Wake Word Detection | 🔄 قيد التطوير |
 | Raspberry Pi Deployment | 🔄 الخطوة الجاية |
+| Remote Shutdown System | ✅ شغال |
 | Mobile App Integration | 📋 مخطط |
 | YOLO Fine-tuning (Electronics) | 📋 مخطط |
 
@@ -192,6 +194,13 @@ Rope/
 │   └── negative/
 │
 ├── data/                           # Runtime data (SQLite DB, logs)
+├── shutdown/
+│   ├── __init__.py
+│   ├── main.py                     # FastAPI remote shutdown server
+│   ├── README.md                   # Deployment instructions
+│   └── requirements.txt            # Isolated deps for Railway
+├── robot_shutdown_client.py        # Raspberry Pi polling client
+├── ropo-shutdown.service           # systemd service for polling client
 ├── piper_models/                   # Legacy TTS models (no longer used)
 ├── tests/                          # Unit tests
 └── vision_debug_output/            # Debug frames from testing
@@ -258,6 +267,9 @@ cp .env.example .env
 | `ROBOT_CAM_HEIGHT`               | Camera capture height                               | `720` (desktop) / `480` (Pi)  |
 | `ROBOT_CAM_FPS`                  | Camera frames per second                            | `30` (desktop) / `15` (Pi)    |
 | `ROBOT_LOG_LEVEL`                | Logging level (`DEBUG`, `INFO`, `WARNING`, `ERROR`) | `INFO`                        |
+| `SHUTDOWN_API_URL`               | Backend API URL for remote shutdown (Railway)       | _(required for shutdown)_     |
+| `SHUTDOWN_TOKEN`                 | Shared secret token for shutdown auth               | _(required for shutdown)_     |
+| `SHUTDOWN_POLL_INTERVAL`         | Polling interval in seconds (RPi client)            | `15`                          |
 
 ## Usage
 
@@ -305,6 +317,59 @@ The vision pipeline runs camera frames through multiple optional modules:
 | `MINIMAL`  | Obstacle detection only                         | Lightweight, fastest performance    |
 | `BALANCED` | Obstacle + Emotion                              | Good balance of features and speed  |
 | `FULL`     | All modules (objects, scene, obstacle, emotion) | Maximum capability, slowest on Pi 4 |
+
+## Remote Shutdown System
+
+A standalone system to remotely shut down the robot via a web dashboard or mobile app.
+
+### Architecture
+
+```
+Mobile App / Browser
+        │  POST /shutdown { "token": "…" }
+        ▼
+Railway (FastAPI — shutdown/main.py)
+        │  GET /shutdown-status (polled every 15s)
+        ▼
+Raspberry Pi (robot_shutdown_client.py)
+        │  sudo shutdown -h now
+        ▼
+     Ropo Robot
+```
+
+### Start the Server (Local Development)
+
+```bash
+# Install deps
+pip install fastapi uvicorn
+
+# Set token (optional — defaults to "ropo-shutdown-default-token")
+export SHUTDOWN_TOKEN=my-secret-token
+
+# Run from project root
+uvicorn shutdown.main:app --host 0.0.0.0 --port 8000
+```
+
+Then open **http://localhost:8000** in a browser to access the Ropo Control Panel.
+
+### API Endpoints
+
+| Method | Path               | Description                    |
+|--------|--------------------|--------------------------------|
+| GET    | `/`                | Web dashboard (Ropo Control Panel) |
+| GET    | `/shutdown-status` | Check shutdown flag            |
+| POST   | `/shutdown`        | Request robot shutdown         |
+| POST   | `/shutdown-reset`  | Reset shutdown flag            |
+
+All `POST` endpoints require `{ "token": "SECRET_TOKEN" }` in the request body.
+
+### Deploy to Railway
+
+See `shutdown/README.md` for full Railway deployment instructions.
+
+### Raspberry Pi Client
+
+The polling client (`robot_shutdown_client.py`) runs as a systemd service (`ropo-shutdown.service`) and continuously polls the backend every 15 seconds. When it detects a shutdown signal, it resets the flag and executes `sudo shutdown -h now`.
 
 ## Roadmap
 

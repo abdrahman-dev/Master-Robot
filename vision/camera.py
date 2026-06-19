@@ -7,6 +7,12 @@ from typing import Optional
 
 from config.settings import IS_RASPBERRY_PI, get_settings
 
+try:
+    from picamera2 import Picamera2
+    PICAMERA2_AVAILABLE = True
+except ImportError:
+    PICAMERA2_AVAILABLE = False
+
 _CAM = get_settings().camera
 
 CAMERA_WIDTH = _CAM.width
@@ -27,18 +33,18 @@ class CameraManager:
         self._available = True
         self._shutdown_event = threading.Event()
 
-        if IS_RASPBERRY_PI:
-            try:
-                from picamera2 import Picamera2
-                self._backend = "picamera2"
-                logger.info("CameraManager: picamera2 backend available")
-            except ImportError:
-                logger.warning("CameraManager: picamera2 not available, falling back to OpenCV")
-                self._backend = "opencv"
+        if IS_RASPBERRY_PI and PICAMERA2_AVAILABLE:
+            self._backend = "picamera2"
+            logger.info("CameraManager: picamera2 backend available")
         else:
             self._backend = "opencv"
+            if IS_RASPBERRY_PI and not PICAMERA2_AVAILABLE:
+                logger.warning("CameraManager: picamera2 not available, falling back to OpenCV")
 
         logger.info(f"CameraManager initialized - backend: {self._backend}")
+
+    def get_backend_name(self) -> str:
+        return self._backend
 
     def is_available(self) -> bool:
         return self._available
@@ -74,10 +80,12 @@ class CameraManager:
         self._shutdown_event.set()
         try:
             if self._backend == "picamera2":
-                self._camera.stop()
-                self._camera.close()
+                if self._camera is not None:
+                    self._camera.stop()
+                    self._camera.close()
             else:
-                self._camera.release()
+                if self._camera is not None:
+                    self._camera.release()
 
             self._camera = None
             self._is_open = False
@@ -134,11 +142,10 @@ class CameraManager:
         self.close()
 
     def _open_picamera(self):
-        from picamera2 import Picamera2
         self._camera = Picamera2()
         config = self._camera.create_preview_configuration(
             main={"size": (CAMERA_WIDTH, CAMERA_HEIGHT), "format": "BGR888"},
-            buffer_count=STREAM_BUFFER_SIZE
+            buffer_count=STREAM_BUFFER_SIZE,
         )
         self._camera.configure(config)
         self._camera.start()

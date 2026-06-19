@@ -30,6 +30,15 @@ class ObjectRecognitionModule:
     def _ensure_model(self):
         if self._model_loaded:
             return
+        if not _MODEL_PATH.exists():
+            logger.error(
+                "[OBJECT] Model file missing at %s. Run setup.sh to download it, "
+                "or manually download from: "
+                "https://github.com/ultralytics/assets/releases/download/v8.3.0/yolov8s.pt",
+                _MODEL_PATH,
+            )
+            self._enabled = False
+            return
         try:
             from ultralytics import YOLO
 

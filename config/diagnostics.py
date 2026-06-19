@@ -67,11 +67,16 @@ def run_startup_diagnostics() -> Dict[str, str]:
     for model_name, path in [
         ("face_proto", settings.paths.models_dir / settings.paths.face_proto_name),
         ("face_weights", settings.paths.models_dir / settings.paths.face_weights_name),
-        ("yolov8n", settings.paths.models_dir / "yolov8n.pt"),
-        ("yolov8n-seg", settings.paths.models_dir / "yolov8n-seg.pt"),
+        ("yolov8s", settings.paths.models_dir / "yolov8s.pt"),
+        ("yolov8s-seg", settings.paths.models_dir / "yolov8s-seg.pt"),
         ("emotion", settings.paths.models_dir / "emotion_cnn_pytorch.pt"),
     ]:
-        results[f"model_{model_name}"] = "ok" if path.exists() else "missing"
+        if not path.exists():
+            results[f"model_{model_name}"] = "missing"
+        elif path.stat().st_size < 1_000_000:
+            results[f"model_{model_name}"] = "corrupted (too small)"
+        else:
+            results[f"model_{model_name}"] = "ok"
 
     try:
         total, used, free = shutil.disk_usage(settings.paths.project_root)

@@ -392,17 +392,25 @@ class LLMModule:
         if language == "ar":
             system_content = (
                 _SETTINGS.llm.system_prompt_arabic
-                + "\n\nتعليمات صارمة جداً لا تتجاهلها أبداً:\n"
-                + "- ردك يكون باللغة العربية الفصحى البسيطة فقط بدون أي استثناء\n"
-                + "- مهما كانت لغة السؤال، ردك عربي دايماً\n"
-                + "- ممنوع تماماً: أي كلمة إنجليزية، أي إيموجي، أي رموز خاصة\n"
-                + "- الرد جملتين أو ثلاثة بالكتير، مختصر ومفيد\n"
-                + "- لو مش عارف الإجابة قول بالعربي إنك مش عارف"
+                + "\n\nقواعد إلزامية يجب الالتزام بها دائماً دون استثناء:\n"
+                + "1) تحدث باللغة العربية الفصحى البسيطة والواضحة فقط، حتى لو كان السؤال بلغة أخرى.\n"
+                + "2) لا تستخدم أي رمز تعبيري (إيموجي)، ولا أي رموز خاصة، ولا علامات نجمية أو تنسيق Markdown.\n"
+                + "3) لا تستخدم أي كلمة أو حرف إنجليزي إطلاقاً، إلا إذا كان اسم علم لا يوجد له مقابل عربي شائع.\n"
+                + "4) اجعل إجابتك في جملة أو جملتين فقط، بأسلوب بسيط يفهمه طفل في المرحلة الابتدائية.\n"
+                + "5) تجنب التعقيد والحشو والمقدمات الطويلة، وادخل في صلب الإجابة مباشرة.\n"
+                + "6) إذا لم تكن متأكداً من الإجابة، قل بوضوح وبساطة إنك لا تعرف، ولا تختلق معلومات.\n"
+                + "7) حافظ على نبرة ودودة، مشجعة، وهادئة تناسب التحدث مع طالب صغير."
             )
         else:
             system_content = (
                 _SETTINGS.llm.system_prompt_english
-                + "\n\nStrict rules: Reply in English only. No emoji. Max 3 sentences."
+                + "\n\nMandatory rules, never break them:\n"
+                + "1) Reply only in simple, clear English, even if the question is in another language.\n"
+                + "2) No emoji, no special symbols, no markdown formatting.\n"
+                + "3) Keep the answer to one or two short sentences, simple enough for a young student.\n"
+                + "4) Avoid long introductions — answer directly.\n"
+                + "5) If unsure of the answer, say so clearly instead of guessing.\n"
+                + "6) Keep a friendly, warm, encouraging tone suitable for a child."
             )
 
         final_message = build_vision_prompt(user_message, vision_context)
