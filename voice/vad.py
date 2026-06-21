@@ -41,6 +41,21 @@ def get_threshold() -> float:
     return _THRESHOLD
 
 
+def _is_valid_local_model_path(path: str) -> bool:
+    if not path:
+        return False
+    if path.strip() != path:
+        return False
+    if path.startswith("#"):
+        return False
+    if "/" not in path and "\\" not in path and not any(path.endswith(ext) for ext in (".jit", ".pt", ".onnx")):
+        return False
+    p = Path(path)
+    if not p.exists() or not p.is_file():
+        return False
+    return True
+
+
 def _load_model_once():
     global _MODEL, _UTILS
 
@@ -55,13 +70,21 @@ def _load_model_once():
             torch.set_num_threads(_VAD.torch_threads)
             local_path = _VAD.model_local_path.strip()
 
-            if local_path:
+            if local_path and _is_valid_local_model_path(local_path):
+                logger.info("[VAD] Loading local model from: %s", local_path)
                 try:
                     model = torch.jit.load(local_path, map_location="cpu")
                 except Exception:
                     model = torch.load(local_path, map_location="cpu")
                 utils = None
             else:
+                if local_path:
+                    logger.warning(
+                        "[VAD] ROBOT_VAD_MODEL_LOCAL_PATH is set but invalid or file not found: %r — "
+                        "falling back to hub download. Check your .env file for a malformed value "
+                        "(e.g. a comment accidentally used as the value).",
+                        local_path
+                    )
                 try:
                     model, utils = torch.hub.load(
                         _VAD.model_hub_repo,

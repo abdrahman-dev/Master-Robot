@@ -32,6 +32,7 @@ class CameraManager:
         self._backend = None
         self._available = True
         self._shutdown_event = threading.Event()
+        self._logged_channel_strip = False
 
         if IS_RASPBERRY_PI and PICAMERA2_AVAILABLE:
             self._backend = "picamera2"
@@ -144,14 +145,20 @@ class CameraManager:
     def _open_picamera(self):
         self._camera = Picamera2()
         config = self._camera.create_preview_configuration(
-            main={"size": (CAMERA_WIDTH, CAMERA_HEIGHT), "format": "BGR888"},
+            main={"size": (CAMERA_WIDTH, CAMERA_HEIGHT), "format": "XBGR8888"},
             buffer_count=STREAM_BUFFER_SIZE,
         )
         self._camera.configure(config)
         self._camera.start()
 
     def _capture_picamera(self) -> np.ndarray:
-        return self._camera.capture_array("main")
+        frame = self._camera.capture_array("main")
+        if frame is not None and frame.ndim == 3 and frame.shape[2] == 4:
+            frame = frame[:, :, :3]
+            if not self._logged_channel_strip:
+                logger.debug("[camera] Stripped 4th channel from picamera2 frame (XBGR8888 -> BGR)")
+                self._logged_channel_strip = True
+        return frame
 
     def _open_opencv(self):
         cap = None
