@@ -26,9 +26,9 @@ def detect_language(text: str) -> str:
     return "en"
 
 
-VOICE_MAP = {
-    "ar": "ar-EG-ShakirNeural",
-    "en": "en-US-GuyNeural",
+_voice_map = {
+    "ar": _SETTINGS.tts.ar_voice,
+    "en": _SETTINGS.tts.en_voice,
 }
 
 
@@ -136,7 +136,7 @@ class TTSModule:
         if language is None:
             language = detect_language(text)
 
-        voice = VOICE_MAP.get(language, VOICE_MAP["en"])
+        voice = _voice_map.get(language, _voice_map["en"])
 
         with self._lock:
             self._stop_event.clear()

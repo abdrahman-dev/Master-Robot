@@ -84,6 +84,15 @@ class ASRSettings:
     supported_languages: Dict[str, str] = field(default_factory=lambda: {"en": "en-US", "ar": "ar-EG"})
 
 
+def _clean_env_value(value: str) -> str:
+    if not value:
+        return ""
+    value = value.strip()
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in ('"', "'"):
+        value = value[1:-1].strip()
+    return value
+
+
 @dataclass(frozen=True)
 class VADSettings:
     sample_rate: int = int(os.getenv("ROBOT_VAD_SAMPLE_RATE", "16000"))
@@ -94,7 +103,7 @@ class VADSettings:
     silence_timeout_seconds: float = float(os.getenv("ROBOT_VAD_SILENCE_TIMEOUT_SEC", "0.80"))
     max_abs_amplitude: float = float(os.getenv("ROBOT_VAD_MAX_ABS_AMP", "1.0"))
     torch_threads: int = int(os.getenv("ROBOT_VAD_TORCH_THREADS", "1"))
-    model_local_path: str = os.getenv("ROBOT_VAD_MODEL_LOCAL_PATH", "")
+    model_local_path: str = _clean_env_value(os.getenv("ROBOT_VAD_MODEL_LOCAL_PATH", ""))
     model_hub_repo: str = os.getenv("ROBOT_VAD_HUB_REPO", "snakers4/silero-vad")
     model_hub_name: str = os.getenv("ROBOT_VAD_HUB_NAME", "silero_vad")
     model_trust_repo: bool = os.getenv("ROBOT_VAD_TRUST_REPO", "true").lower() in ("1", "true", "yes")
@@ -109,16 +118,30 @@ class LLMSettings:
     request_timeout_seconds: int = int(os.getenv("ROBOT_LLM_REQUEST_TIMEOUT_SEC", "90"))
     summarization_timeout_seconds: int = int(os.getenv("ROBOT_LLM_SUMMARIZE_TIMEOUT_SEC", "60"))
     sliding_window_size: int = int(os.getenv("ROBOT_LLM_WINDOW_SIZE", "50"))
-
     system_prompt_arabic: str = (
-        "أنت روبوت تعليمي اسمك روبو. تتحدث مع طلاب في مرحلة التعليم الأساسي. تحدث دائماً باللغة العربية الفصحى البسيطة الواضحة. إجاباتك قصيرة — جملتان أو ثلاث على الأكثر. كن مرحاً ومشجعاً."
+        "أنت روبوت تعليمي ذكي اسمك روبو. "
+        "تساعد الطلاب في فهم الدروس والإجابة عن أسئلتهم بطريقة واضحة وبسيطة. "
+        "تحدث دائمًا باللغة العربية الفصحى السهلة، ولا تستخدم أي لهجة عامية إلا إذا طلب المستخدم ذلك صراحة. "
+        "استخدم كلمات مناسبة لطلاب المدارس والجامعات. "
+        "اجعل إجاباتك مختصرة ومباشرة، ولا تتجاوز ثلاث جمل إلا إذا طلب المستخدم شرحًا مفصلًا. "
+        "إذا احتاج السؤال إلى شرح، فاشرح خطوة بخطوة بطريقة سهلة. "
+        "لا تستخدم أي رموز تعبيرية (Emoji) أو زخارف أو تنسيقات غير ضرورية. "
+        "لا تكرر السؤال قبل الإجابة، وابدأ بالإجابة مباشرة. "
+        "لا تبالغ في الاعتذار أو المجاملة، وكن مهذبًا وهادئًا ومشجعًا. "
+        "إذا لم تكن متأكدًا من الإجابة، فقل ذلك بوضوح ولا تخترع معلومات. "
+        "إذا كان هناك أكثر من إجابة صحيحة، فاختر الأنسب واذكر السبب باختصار."
     )
-
     system_prompt_english: str = (
-        "You are an intelligent educational robot assistant helping students "
-        "in their learning journey. Explain concepts simply, encourage curiosity, "
-        "and help students understand. Speak in clear, simple English. "
-        "Keep answers short (2-3 sentences max). Be enthusiastic and positive."
+        "You are an intelligent educational robot named Robo. "
+        "Your role is to help students learn by explaining concepts clearly and answering questions accurately. "
+        "Always speak in clear, natural English that is easy for school and university students to understand. "
+        "Keep your answers short and direct, normally no more than two or three sentences unless the user requests a detailed explanation. "
+        "When necessary, explain concepts step by step. "
+        "Do not use emojis, decorative symbols, or unnecessary formatting. "
+        "Do not repeat the user's question before answering. Start with the answer immediately. "
+        "Be polite, calm, encouraging, and professional without sounding overly enthusiastic. "
+        "If you are unsure about something, admit it instead of inventing information. "
+        "When multiple valid answers exist, recommend the most suitable one and briefly explain why."
     )
 
 
@@ -128,6 +151,8 @@ class TTSSettings:
     audio_temp_dir: str = os.getenv("ROBOT_TTS_TEMP_DIR", tempfile.gettempdir())
     audio_filename_template: str = os.getenv("ROBOT_TTS_AUDIO_TEMPLATE", "tts_{turn_id}.wav")
     pygame_poll_interval_seconds: float = float(os.getenv("ROBOT_TTS_POLL_SEC", "0.05"))
+    ar_voice: str = os.getenv("ROBOT_TTS_AR_VOICE", "ar-SA-HamedNeural")
+    en_voice: str = os.getenv("ROBOT_TTS_EN_VOICE", "en-US-GuyNeural")
 
 
 from enum import Enum

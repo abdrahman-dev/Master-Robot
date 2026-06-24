@@ -52,6 +52,19 @@ FILLER_PHRASES = {
     ],
 }
 
+FALLBACK_MESSAGES = {
+    "ar": [
+        "عذرًا، لا أستطيع الاتصال بالخادم في الوقت الحالي.",
+        "يرجى المحاولة مرة أخرى بعد قليل.",
+        "أعتذر، يوجد خلل مؤقت في الاتصال.",
+    ],
+    "en": [
+        "Sorry, I'm unable to connect right now.",
+        "Please try again in a moment.",
+        "I'm having trouble reaching the server.",
+    ],
+}
+
 WAKE_WORDS = ["يا روبو", "روبو", "ropo", "hey robo", "ok robo"]
 
 MOVE_COMMANDS = {
@@ -189,7 +202,7 @@ class VoicePipeline:
 
     def _maybe_stop_tts_on_interrupt(self) -> None:
         if self._tts.is_playing():
-            logger.info("[interrupt] Stopping TTS playback")
+            logger.info("[TTS] Interrupted by new speech")
             self._tts.stop()
 
     def _enqueue_segment(self, segment: Segment) -> None:
@@ -221,7 +234,7 @@ class VoicePipeline:
 
     def _process_segment(self, segment: Segment) -> None:
         if segment.turn_id != self._get_latest_turn_id():
-            logger.debug("[segment] Stale turn %d, skipping", segment.turn_id)
+            logger.debug("[worker] Stale turn %d, skipping", segment.turn_id)
             return
 
         try:
@@ -247,7 +260,7 @@ class VoicePipeline:
                 return
 
             if _is_wake_word(text):
-                logger.info("[pipeline] Wake word detected")
+                logger.info("[voice] Wake word detected")
                 if self._face_set_state:
                     self._face_set_state("LISTENING")
                 self._wake_word_active = True
@@ -268,7 +281,7 @@ class VoicePipeline:
             if cmd is not None and self._motor is not None and self._motor.is_available():
                 method_name, duration_ms = cmd
                 getattr(self._motor, method_name)(duration_ms)
-                logger.info("[pipeline] Motor command: %s(%s)", method_name, duration_ms)
+                logger.info("[voice] Motor command: %s(%s)", method_name, duration_ms)
 
             if self._face_set_state:
                 self._face_set_state("THINKING")
@@ -299,7 +312,8 @@ class VoicePipeline:
                 response = self._llm.chat(self._session_id, text, vision_context=vision_context)
             except LLMModuleError:
                 logger.warning("[LLM] OpenRouter unavailable, using fallback")
-                response = "I am having trouble connecting right now. Please try again."
+                lang = detected_lang if detected_lang in ("ar", "en") else "en"
+                response = random.choice(FALLBACK_MESSAGES[lang])
             llm_time = time.monotonic() - t0
             logger.info("[LLM] response_time=%.2fs", llm_time)
 
@@ -323,23 +337,23 @@ class VoicePipeline:
             self._wake_word_active = False
 
         except (asr.ASRModuleError, tts.TTSModuleError) as exc:
-            logger.error("[segment] Processing failed: %s", exc, exc_info=True)
+            logger.exception("[worker] Processing failed: %s", exc)
             if self._face_set_state:
                 self._face_set_state("IDLE")
         except Exception as exc:
-            logger.error("[segment] Unexpected error: %s", exc, exc_info=True)
+            logger.exception("[worker] Unexpected error: %s", exc)
             if self._face_set_state:
                 self._face_set_state("IDLE")
 
     def run_forever(self) -> None:
         if not self._mic_available:
-            logger.warning("[pipeline] Microphone unavailable, audio pipeline disabled")
+            logger.warning("[voice] Microphone unavailable, audio pipeline disabled")
             return
 
         try:
             import sounddevice as sd
         except Exception as exc:
-            logger.error("[pipeline] sounddevice import failed: %s", exc)
+            logger.error("[voice] sounddevice import failed: %s", exc)
             self._mic_available = False
             return
 
@@ -348,11 +362,11 @@ class VoicePipeline:
             device_info = sd.query_devices(sd.default.device[0], "input")
             device_sample_rate = int(device_info["default_samplerate"])
             logger.info(
-                "[pipeline] Device default samplerate: %d Hz (internal: %d Hz)",
+                "[voice] Device samplerate: %d Hz (target: %d Hz)",
                 device_sample_rate, self._sample_rate,
             )
         except Exception as exc:
-            logger.warning("[pipeline] Could not query device samplerate: %s — using %d Hz", exc, self._sample_rate)
+            logger.warning("[voice] Could not query device samplerate: %s, using %d Hz", exc, self._sample_rate)
 
         needs_resample = device_sample_rate != self._sample_rate
         device_chunk_size = int(device_sample_rate * _SETTINGS.vad.chunk_duration_ms / 1000)
@@ -364,7 +378,7 @@ class VoicePipeline:
         if needs_resample:
             up, down = _compute_resample_ratio(device_sample_rate, self._sample_rate)
             logger.info(
-                "[pipeline] Resampling enabled: %d Hz → %d Hz (ratio=%d/%d)",
+                "[voice] Resampling: %d Hz -> %d Hz (ratio=%d/%d)",
                 device_sample_rate, self._sample_rate, up, down,
             )
 
@@ -379,7 +393,7 @@ class VoicePipeline:
             if not self._running:
                 return
             if status:
-                logger.debug("[stream] Audio status: %s", status)
+                logger.debug("[voice] Audio stream status: %s", status)
             if indata is None or len(indata) == 0:
                 return
 
@@ -437,7 +451,7 @@ class VoicePipeline:
 
         if self._face_set_state:
             self._face_set_state("IDLE")
-        logger.info("[pipeline] Listening...")
+        logger.info("[voice] Listening...")
 
         try:
             with sd.InputStream(
@@ -450,14 +464,14 @@ class VoicePipeline:
                 while self._running:
                     time.sleep(0.5)
         except sd.PortAudioError as e:
-            logger.warning("[pipeline] No microphone available: %s", e)
+            logger.warning("[voice] No microphone available: %s", e)
             self._mic_available = False
         except Exception as e:
-            logger.error("[pipeline] Stream error: %s", e, exc_info=True)
+            logger.exception("[voice] Stream error: %s", e)
         finally:
             self._resample_buffer = np.array([], dtype=np.float32)
 
-        logger.info("[pipeline] Audio stream closed")
+        logger.info("[voice] Audio stream closed")
 
     def start(self) -> None:
         self._running = True
@@ -465,10 +479,10 @@ class VoicePipeline:
         self._worker_thread.start()
         self._stream_thread = threading.Thread(target=self.run_forever, daemon=False)
         self._stream_thread.start()
-        logger.info("[pipeline] Started")
+        logger.info("[voice] Started")
 
     def stop(self) -> None:
-        logger.info("[pipeline] Stopping...")
+        logger.info("[voice] Stopping...")
         self._running = False
         if self._stream_thread:
             self._stream_thread.join(timeout=3)
@@ -476,5 +490,5 @@ class VoicePipeline:
         if self._worker_thread:
             self._worker_thread.join(timeout=5)
             self._worker_thread = None
-        logger.info("[pipeline] Stopped (total=%d, dropped=%d)",
+        logger.info("[voice] Stopped (total=%d, dropped=%d)",
                      self._total_segments, self._dropped_segments)

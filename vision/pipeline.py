@@ -60,7 +60,7 @@ class VisionPipeline:
         self._motor = None
         self._last_head_angle = 90
 
-        logger.info("VisionPipeline initialized. profile=%s preset=%s",
+        logger.info("[vision] Pipeline initialized. profile=%s preset=%s",
                      self._current_profile.value, _PRESET.value)
 
     def set_watchdog_ping(self, fn: Callable) -> None:
@@ -72,13 +72,13 @@ class VisionPipeline:
 
     def open(self) -> bool:
         if self._is_open:
-            logger.warning("VisionPipeline is already open.")
+            logger.warning("[vision] Pipeline is already open")
             return True
 
         self._shutdown_event.clear()
         self._camera = CameraManager()
         if not self._camera.is_available():
-            logger.error("Cannot open VisionPipeline: camera not available")
+            logger.error("[vision] Cannot open pipeline: camera not available")
             self._camera = None
             return False
         try:
@@ -95,11 +95,11 @@ class VisionPipeline:
             self._apply_profile(self._current_profile)
 
             self._is_open = True
-            logger.info("VisionPipeline opened successfully.")
+            logger.info("[vision] Pipeline opened successfully")
             return True
 
         except Exception as e:
-            logger.error(f"Failed to open VisionPipeline: {e}")
+            logger.exception("[vision] Failed to open pipeline: %s", e)
             self.close()
             return False
 
@@ -128,7 +128,7 @@ class VisionPipeline:
             try:
                 self._camera.close()
             except Exception as e:
-                logger.warning(f"Error closing camera: {e}")
+                logger.warning("[vision] Error closing camera: %s", e)
             finally:
                 self._camera = None
 
@@ -147,7 +147,7 @@ class VisionPipeline:
                     elif hasattr(mod, "close"):
                         mod.close()
                 except Exception as e:
-                    logger.warning(f"Error closing {name}: {e}")
+                    logger.warning("[vision] Error closing %s: %s", name, e)
 
         self._face_tracker = None
         self._gesture_detector = None
@@ -156,7 +156,7 @@ class VisionPipeline:
         self._scene_segmentation = None
         self._obstacle_detector = None
         self._is_open = False
-        logger.info("VisionPipeline closed.")
+        logger.info("[vision] Pipeline closed")
 
     def get_all_context(self) -> Dict:
         if not self._is_open:
@@ -232,7 +232,7 @@ class VisionPipeline:
             return context
 
         except Exception as e:
-            logger.error(f"Error getting vision context: {e}")
+            logger.exception("[vision] Error getting context: %s", e)
             return self._default_context({"error": str(e)})
 
     def _adaptive_throttle(self, last_frame_time: float) -> None:
@@ -292,53 +292,53 @@ class VisionPipeline:
 
     def warmup(self, frames: int = 3) -> bool:
         if not self._is_open:
-            logger.error("Cannot warmup: pipeline is not open")
+            logger.error("[vision] Cannot warmup: pipeline not open")
             return False
 
-        logger.info(f"Warming up camera ({frames} frames)...")
+        logger.info("[vision] Warming up camera (%d frames)...", frames)
         try:
             for i in range(frames):
                 if self._shutdown_event.is_set():
                     return False
                 frame = self._camera.get_frame()
                 if frame is None:
-                    logger.warning(f"Warmup frame {i+1} failed")
+                    logger.warning("[vision] Warmup frame %d failed", i + 1)
                     return False
-            logger.info("Camera warmup complete")
+            logger.info("[vision] Warmup complete")
             return True
         except Exception as e:
-            logger.error(f"Warmup error: {e}")
+            logger.exception("[vision] Warmup error: %s", e)
             return False
 
     def enable_object_recognition(self):
         if self._object_recognition is not None:
             self._object_recognition.enabled = True
-            logger.info("[VISION] Object recognition enabled")
+            logger.info("[vision] Object recognition enabled")
 
     def disable_object_recognition(self):
         if self._object_recognition is not None:
             self._object_recognition.enabled = False
-            logger.info("[VISION] Object recognition disabled")
+            logger.info("[vision] Object recognition disabled")
 
     def enable_scene_segmentation(self):
         if self._scene_segmentation is not None:
             self._scene_segmentation.enabled = True
-            logger.info("[VISION] Scene segmentation enabled")
+            logger.info("[vision] Scene segmentation enabled")
 
     def disable_scene_segmentation(self):
         if self._scene_segmentation is not None:
             self._scene_segmentation.enabled = False
-            logger.info("[VISION] Scene segmentation disabled")
+            logger.info("[vision] Scene segmentation disabled")
 
     def enable_obstacle_detection(self):
         if self._obstacle_detector is not None:
             self._obstacle_detector.enabled = True
-            logger.info("[VISION] Obstacle detection enabled")
+            logger.info("[vision] Obstacle detection enabled")
 
     def disable_obstacle_detection(self):
         if self._obstacle_detector is not None:
             self._obstacle_detector.enabled = False
-            logger.info("[VISION] Obstacle detection disabled")
+            logger.info("[vision] Obstacle detection disabled")
 
     def run_loop(self) -> None:
         if not self._is_open:
@@ -372,13 +372,13 @@ class VisionPipeline:
                     logger.info("[vision] %d frames processed", frame_count)
                 time.sleep(0.01)
         except Exception as e:
-            logger.error(f"[vision] Loop error: {e}")
+            logger.exception("[vision] Loop error: %s", e)
         finally:
-            logger.info(f"[vision] Loop stopped ({frame_count} frames processed)")
+            logger.info("[vision] Loop stopped (%d frames processed)", frame_count)
 
     def start(self) -> None:
         if not self._is_open:
-            logger.error("Cannot start: pipeline not open")
+            logger.error("[vision] Cannot start: pipeline not open")
             return
 
         self._running = True

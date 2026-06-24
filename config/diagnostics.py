@@ -35,6 +35,14 @@ THERMAL_RESTORE_C = 65.0
 
 # ── Startup diagnostics ───────────────────────────────────────────
 
+def _fmt_size(bytes: int) -> str:
+    if bytes >= 1_000_000:
+        return f"{bytes / 1_000_000:.0f} MB"
+    if bytes >= 1_000:
+        return f"{bytes / 1_000:.0f} KB"
+    return f"{bytes} B"
+
+
 def run_startup_diagnostics() -> Dict[str, str]:
     results = {}
 
@@ -43,16 +51,20 @@ def run_startup_diagnostics() -> Dict[str, str]:
         devices = sd.query_devices()
         has_input = any(d["max_input_channels"] > 0 for d in devices)
         results["microphone"] = "ok" if has_input else "no input device"
+        logger.debug("[startup] Microphone check: %s", results["microphone"])
     except Exception as e:
         results["microphone"] = f"error: {e}"
+        logger.debug("[startup] Microphone check failed: %s", e)
 
     try:
         import sounddevice as sd
         devices = sd.query_devices()
         has_output = any(d["max_output_channels"] > 0 for d in devices)
         results["speaker"] = "ok" if has_output else "no output device"
+        logger.debug("[startup] Speaker check: %s", results["speaker"])
     except Exception as e:
         results["speaker"] = f"error: {e}"
+        logger.debug("[startup] Speaker check failed: %s", e)
 
     try:
         import cv2
@@ -60,40 +72,56 @@ def run_startup_diagnostics() -> Dict[str, str]:
         ret = cap.grab()
         cap.release()
         results["camera"] = "ok" if ret else "not accessible"
+        logger.debug("[startup] Camera check: %s", results["camera"])
     except Exception as e:
         results["camera"] = f"error: {e}"
+        logger.debug("[startup] Camera check failed: %s", e)
 
     settings = get_settings()
-    for model_name, path in [
-        ("face_proto", settings.paths.models_dir / settings.paths.face_proto_name),
-        ("face_weights", settings.paths.models_dir / settings.paths.face_weights_name),
-        ("yolov8s", settings.paths.models_dir / "yolov8s.pt"),
-        ("yolov8s-seg", settings.paths.models_dir / "yolov8s-seg.pt"),
-        ("emotion", settings.paths.models_dir / "emotion_cnn_pytorch.pt"),
-    ]:
+
+    _MODEL_CHECKS = [
+        ("face_proto", settings.paths.face_proto_name, 0),
+        ("face_weights", settings.paths.face_weights_name, 1_000_000),
+        ("yolov8s", "yolov8s.pt", 1_000_000),
+        ("yolov8s-seg", "yolov8s-seg.pt", 1_000_000),
+        ("emotion", "emotion_cnn_pytorch.pt", 100_000),
+    ]
+
+    for model_name, filename, min_size in _MODEL_CHECKS:
+        path = settings.paths.models_dir / filename
         if not path.exists():
-            results[f"model_{model_name}"] = "missing"
-        elif path.stat().st_size < 1_000_000:
-            results[f"model_{model_name}"] = "corrupted (too small)"
+            results[f"model_{model_name}"] = f"missing: {filename}"
+            logger.debug("[startup] Model %s: missing: %s", model_name, filename)
+        elif min_size and path.stat().st_size < min_size:
+            size_str = _fmt_size(path.stat().st_size)
+            exp_str = _fmt_size(min_size)
+            results[f"model_{model_name}"] = f"corrupted (expected > {exp_str}, got {size_str})"
+            logger.debug("[startup] Model %s: corrupted (expected > %s, got %s)", model_name, exp_str, size_str)
         else:
             results[f"model_{model_name}"] = "ok"
+            logger.debug("[startup] Model %s: ok", model_name)
 
     try:
         total, used, free = shutil.disk_usage(settings.paths.project_root)
-        free_gb = free // (2**30)
-        results["disk_free_gb"] = str(free_gb)
-        results["disk"] = "ok" if free_gb > 1 else "low space"
+        free_gb = free / (2**30)
+        results["disk_free_gb"] = f"{free_gb:.1f}"
+        results["disk"] = "ok" if free_gb > 1 else f"Low disk space: {free_gb:.1f} GB remaining"
+        logger.debug("[startup] Disk check: %s (%.1f GB free)", results["disk"], free_gb)
     except Exception as e:
         results["disk"] = f"error: {e}"
+        logger.debug("[startup] Disk check failed: %s", e)
 
     try:
         import psutil
         mem = psutil.virtual_memory()
+        avail_gb = mem.available / (1024**3)
         results["ram_total_gb"] = f"{mem.total / (1024**3):.1f}"
-        results["ram_available_gb"] = f"{mem.available / (1024**3):.1f}"
-        results["ram"] = "ok" if mem.available > 512 * 1024 * 1024 else "low"
+        results["ram_available_gb"] = f"{avail_gb:.1f}"
+        results["ram"] = "ok" if avail_gb > 0.5 else f"low ({avail_gb:.1f} GB available)"
+        logger.debug("[startup] RAM check: %.1f GB available", avail_gb)
     except ImportError:
         results["ram"] = "unknown (install psutil)"
+        logger.debug("[startup] RAM check: psutil not installed")
 
     try:
         socket.setdefaulttimeout(3)
@@ -101,8 +129,10 @@ def run_startup_diagnostics() -> Dict[str, str]:
             ("8.8.8.8", 53)
         )
         results["internet"] = "ok"
+        logger.debug("[startup] Internet check: ok")
     except Exception:
         results["internet"] = "not reachable"
+        logger.debug("[startup] Internet check: not reachable")
 
     return results
 

@@ -44,10 +44,6 @@ def get_threshold() -> float:
 def _is_valid_local_model_path(path: str) -> bool:
     if not path:
         return False
-    if path.strip() != path:
-        return False
-    if path.startswith("#"):
-        return False
     if "/" not in path and "\\" not in path and not any(path.endswith(ext) for ext in (".jit", ".pt", ".onnx")):
         return False
     p = Path(path)
