@@ -146,12 +146,23 @@ class FaceIdentityTracker:
             embedding = _face_embedding(face_crop)
             face_id, status = self._identify_face(embedding)
 
+            cx = (ox1 + ox2) / 2.0
+            cy = (oy1 + oy2) / 2.0
+
             results.append({
                 "face_id": face_id,
                 "status": status,
                 "bbox": (oy1, ox2, oy2, ox1),
+                "center_x": cx,
+                "center_y": cy,
+                "normalized_x": cx / w,
+                "normalized_y": cy / h,
+                "frame_width": w,
+                "frame_height": h,
                 "landmarks": None,
             })
+
+        results.sort(key=lambda f: (f["bbox"][1] - f["bbox"][3]) * (f["bbox"][2] - f["bbox"][0]), reverse=True)
 
         return results
 

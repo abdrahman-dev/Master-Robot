@@ -158,6 +158,7 @@ class CameraManager:
             if not self._logged_channel_strip:
                 logger.debug("[camera] Stripped 4th channel from picamera2 frame (XBGR8888 -> BGR)")
                 self._logged_channel_strip = True
+        frame = cv2.flip(frame, 0)
         return frame
 
     def _open_opencv(self):
@@ -187,4 +188,4 @@ class CameraManager:
         if not ret or frame is None or frame.size == 0:
             logger.warning("Invalid frame received")
             return None
-        return cv2.flip(frame, 1)
+        return cv2.flip(frame, 0)

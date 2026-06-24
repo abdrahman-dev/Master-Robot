@@ -17,6 +17,7 @@ from voice.face import FaceModule, FaceState
 from vision.pipeline import VisionPipeline
 from llm.module import LLMModule
 from hardware import MotorController
+from hardware.battery_monitor import BatteryMonitor
 
 _SETTINGS = get_settings()
 _PRESET = detect_preset()
@@ -96,6 +97,23 @@ def main() -> None:
     else:
         logger.warning("[main] Motor controller not available — running without motors")
 
+    vision_pipeline.set_motor_controller(motor)
+
+    def on_low_battery(voltage: float):
+        logger.warning("[main] Low battery: %.2fV", voltage)
+
+    def on_battery_update(voltage: float):
+        pct = max(0, min(100, int((voltage - 6.8) / (8.4 - 6.8) * 100)))
+        face.set_battery_status(percentage=pct, voltage=voltage, charging=False)
+
+    battery_monitor = BatteryMonitor(
+        motor_controller=motor,
+        on_low_battery=on_low_battery,
+        on_shutdown=lambda: logger.critical("[main] Battery shutdown triggered"),
+        on_update=on_battery_update,
+    )
+    battery_monitor.start()
+
     def set_face_state(state_str: str) -> None:
         try:
             face.set_state(FaceState(state_str))
@@ -128,6 +146,7 @@ def main() -> None:
         voice_pipeline.stop()
         vision_pipeline.stop()
         vision_pipeline.close()
+        battery_monitor.stop()
         motor.close()
         llm.close()
         face.stop()

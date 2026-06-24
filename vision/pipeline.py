@@ -57,11 +57,18 @@ class VisionPipeline:
 
         self._watchdog_ping: Optional[Callable] = None
 
+        self._motor = None
+        self._last_head_angle = 90
+
         logger.info("VisionPipeline initialized. profile=%s preset=%s",
                      self._current_profile.value, _PRESET.value)
 
     def set_watchdog_ping(self, fn: Callable) -> None:
         self._watchdog_ping = fn
+
+    def set_motor_controller(self, motor) -> None:
+        self._motor = motor
+        logger.info("[vision] Motor controller attached for head tracking")
 
     def open(self) -> bool:
         if self._is_open:
@@ -348,7 +355,18 @@ class VisionPipeline:
             while self._running and not self._shutdown_event.is_set():
                 if self._watchdog_ping:
                     self._watchdog_ping()
-                self.get_all_context()
+                context = self.get_all_context()
+
+                # Head tracking — move servo to follow largest face
+                faces = context.get("faces", [])
+                if faces and self._motor is not None and self._motor.is_available():
+                    nx = faces[0].get("normalized_x", 0.5)
+                    head_angle = int((1.0 - nx) * 180)
+                    head_angle = max(0, min(180, head_angle))
+                    if abs(head_angle - self._last_head_angle) >= 5:
+                        self._motor.move_head(head_angle)
+                        self._last_head_angle = head_angle
+
                 frame_count += 1
                 if frame_count % 100 == 0:
                     logger.info("[vision] %d frames processed", frame_count)

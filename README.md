@@ -12,6 +12,7 @@ An interactive educational robot with a conversational voice pipeline and an ani
 - **Voice Pipeline** — VAD (Silero) → ASR (Google) → LLM (OpenRouter) → TTS (edge-tts)
 - **Vision Pipeline** — Face tracking, gesture recognition, emotion detection, object detection (YOLOv8), obstacle detection, scene understanding
 - **Animated Robot Face** — Pygame-based animated face with state transitions (IDLE, LISTENING, THINKING, SPEAKING, CURIOUS)
+- **Hardware Control** — ESP32-based motor driver (TB6612FNG) with differential drive, three servos for head and arms, battery voltage monitoring with automatic Pi shutdown
 - **Settings Panel** — Swipe-based UI to toggle vision profiles and modes
 - **Session Memory** — SQLite-backed conversation history with sliding window and summarization
 - **Filler Phrases** — Natural-sounding filler phrases in Arabic and English while the LLM processes
@@ -29,7 +30,13 @@ An interactive educational robot with a conversational voice pipeline and an ani
 | Settings Panel (swipe gesture) | ✅ شغال |
 | Mic Mute Toggle | ✅ شغال |
 | Vision Pipeline (YOLO + Face + Gesture) | ✅ شغال على Desktop |
-| Wake Word Detection | 🔄 قيد التطوير |
+| Wake Word Detection | ✅ شغال (كلمات: "روبو" / "ropo" / "يا روبو") |
+| Voice Motor Commands | ✅ شغال (أوامر بالعربية والإنجليزية) |
+| Head Tracking (Servo Follows Face) | ✅ شغال |
+| Camera Vertical Flip (Fix for upside-down mount) | ✅ شغال |
+| Face Identity Tracking (LBP Embeddings) | ✅ شغال |
+| ESP32 Motor + Servo + Battery Firmware | ✅ شغال |
+| Battery Monitor (Auto Shutdown on Low) | ✅ شغال |
 | Raspberry Pi Deployment | 🔄 الخطوة الجاية |
 | Remote Shutdown System | ✅ شغال |
 | Mobile App Integration | 📋 مخطط |
@@ -182,6 +189,13 @@ Rope/
 │   ├── __init__.py
 │   └── module.py                   # LLM module (OpenRouter + session memory)
 │
+├── hardware/
+│   ├── __init__.py
+│   ├── motor_controller.py         # Serial communication with ESP32
+│   ├── battery_monitor.py          # Voltage monitoring & auto-shutdown
+│   └── esp32/
+│       └── main.cpp                # ESP32 firmware (motors, servos, battery ADC)
+│
 ├── models/                         # Pre-trained ML models
 │   ├── deploy.prototxt
 │   ├── res10_300x300_ssd_iter_140000.caffemodel
@@ -215,6 +229,12 @@ Rope/
 - Speaker (3.5mm or USB)
 - USB or CSI camera
 - Touchscreen (for gesture/swipe interaction)
+- ESP32 development board (for motor/servo/battery control)
+- TB6612FNG dual motor driver module
+- 2x DC motors with wheels (differential drive)
+- 3x Servo motors (head, left arm, right arm)
+- 7.4V LiPo battery (or equivalent)
+- Voltage divider resistors for battery ADC (GPIO 34 max 3.3V)
 
 ### Software
 
@@ -267,6 +287,26 @@ cp .env.example .env
 | `ROBOT_CAM_HEIGHT`               | Camera capture height                               | `720` (desktop) / `480` (Pi)  |
 | `ROBOT_CAM_FPS`                  | Camera frames per second                            | `30` (desktop) / `15` (Pi)    |
 | `ROBOT_LOG_LEVEL`                | Logging level (`DEBUG`, `INFO`, `WARNING`, `ERROR`) | `INFO`                        |
+| `ROBOT_STUDENT_NAME`             | Student name displayed in UI                        | `Student`                     |
+| `ROBOT_ASR_PROVIDER`             | ASR engine (`google`)                               | `google`                      |
+| `ROBOT_ASR_LANGUAGE_MODE`        | Language detection (`auto`, `ar`, `en`)              | `auto`                        |
+| `ROBOT_ASR_SAMPLE_RATE`          | ASR sample rate in Hz                                | `16000`                       |
+| `ROBOT_ASR_DEFAULT_DURATION_SEC` | Default recording duration (non-streaming)           | `5.0`                         |
+| `ROBOT_LLM_PROVIDER`             | LLM provider (`openrouter`)                          | `openrouter`                  |
+| `ROBOT_LLM_REQUEST_TIMEOUT_SEC`  | LLM request timeout                                  | `90`                          |
+| `ROBOT_LLM_SUMMARIZE_TIMEOUT_SEC`| Summarization timeout                                | `60`                          |
+| `ROBOT_LLM_WINDOW_SIZE`          | Conversation sliding window size (messages)          | `50`                          |
+| `ROBOT_FACE_THRESHOLD`           | Face detection confidence threshold                  | `0.35`                        |
+| `ROBOT_FACE_FRAME_SKIP`          | Process every Nth face frame                         | `2`                           |
+| `ROBOT_FACE_SCALE_FACTOR`        | Scale factor for face detection image                | `0.5`                         |
+| `ROBOT_TTS_ENGINE`               | TTS engine (`edge_tts`)                              | `edge_tts`                    |
+| `ROBOT_TTS_POLL_SEC`             | Pygame playback poll interval                        | `0.05`                        |
+| `ROBOT_MOTOR_PORT`               | Serial port for ESP32                                | `COM3` (Win) / `/dev/ttyS0` (Pi) |
+| `ROBOT_MOTOR_BAUDRATE`           | Serial baud rate                                     | `115200`                      |
+| `ROBOT_METRICS_OVERLAY`          | Show FPS/temperature overlay on face (`0`/`1`)       | `0`                           |
+| `ROBOT_ADAPTIVE_SHEDDING`        | Enable adaptive load shedding (`0`/`1`)              | `1`                           |
+| `ROBOT_TARGET_FRAME_MS`          | Target milliseconds per frame for throttling         | `100`                         |
+| `ROBOT_MAX_FRAME_SKIP`           | Maximum frame skip during throttling                 | `10`                          |
 | `SHUTDOWN_API_URL`               | Backend API URL for remote shutdown (Railway)       | _(required for shutdown)_     |
 | `SHUTDOWN_TOKEN`                 | Shared secret token for shutdown auth               | _(required for shutdown)_     |
 | `SHUTDOWN_POLL_INTERVAL`         | Polling interval in seconds (RPi client)            | `15`                          |
@@ -292,10 +332,24 @@ python main.py           # run the robot
 
 The voice pipeline processes audio in real-time through four stages:
 
-1. **VAD (Silero)** — Continuously monitors microphone input using Silero VAD to detect speech segments with configurable sensitivity and silence timeout.
-2. **ASR (Google)** — Transcribes captured speech segments using Google's Speech Recognition API with automatic language detection (Arabic/English).
-3. **LLM (OpenRouter)** — Sends transcribed text to the LLM with conversation history and optional vision context. While the LLM processes, a natural filler phrase plays (e.g., "Let me think..." / "لحظة بفكر...") to maintain engagement.
-4. **TTS (edge-tts)** — Speaks the LLM response aloud using edge-tts, with animated face state transitions.
+1. **Wake Word Detection** — Continuously listens for the robot name ("روبو" / "ropo" / "يا روبو" / "hey robo") using fuzzy string matching (rapidfuzz, threshold 70%). All regular conversation is gated behind wake word activation. First wake word triggers an introduction greeting.
+2. **VAD (Silero)** — Continuously monitors microphone input using Silero VAD to detect speech segments with configurable sensitivity and silence timeout.
+3. **ASR (Google)** — Transcribes captured speech segments using Google's Speech Recognition API with automatic language detection (Arabic/English).
+4. **LLM (OpenRouter)** — Sends transcribed text to the LLM with conversation history and optional vision context. While the LLM processes, a natural filler phrase plays (e.g., "Let me think..." / "لحظة بفكر...") to maintain engagement.
+5. **TTS (edge-tts)** — Speaks the LLM response aloud using edge-tts, with animated face state transitions. If new speech is detected while speaking, TTS is interrupted immediately.
+
+### Voice Motor Commands
+
+The pipeline also recognises movement commands directly from speech (before sending to LLM):
+
+| Phrase | Action |
+|--------|--------|
+| "تعالي" / "اقترب" / "come here" | Move forward (2s) |
+| "ارجع" / "go back" | Move backward (2s) |
+| "يمين" / "turn right" | Turn right (1s) |
+| "شمال" / "turn left" | Turn left (1s) |
+| "دور" | Turn right (3s) |
+| "وقف" / "استنى" / "stop" | Stop motors |
 
 **Offline fallback:** If OpenRouter is unreachable, the robot responds with a friendly error message. The pipeline continues running and will retry on the next turn.
 
@@ -303,7 +357,9 @@ The voice pipeline processes audio in real-time through four stages:
 
 The vision pipeline runs camera frames through multiple optional modules:
 
-- **Face Tracker** — Detects and tracks faces using OpenCV DNN (Caffe SSD)
+- **Camera** — OpenCV backend with automatic picamera2 detection on Raspberry Pi for CSI cameras. Frames are vertically flipped (`cv2.flip(frame, 0)`) to compensate for physically upside-down camera mounting. The OpenCV backend tries multiple camera indices as fallback.
+- **Face Tracker** — Detects and tracks faces using OpenCV DNN (Caffe SSD) with identity tracking via LBP embeddings and cosine distance matching. Returns `"same_student"` or `"new_student"` status with per-session UUID. Results include `center_x`/`center_y`, `normalized_x`/`normalized_y` (0.0–1.0), and `frame_width`/`frame_height`. Faces are sorted by bounding box area (largest first).
+- **Head Tracking** — The pipeline maps the largest face's `normalized_x` to the head servo angle (0–180°) with a 5° deadband to avoid serial flooding. Call `set_motor_controller(motor)` to attach a MotorController instance.
 - **Gesture Recognition** — Recognizes hand gestures using MediaPipe hand landmarks
 - **Emotion Detection** — Classifies facial expressions using a custom CNN
 - **Object Detection** — Identifies objects using YOLOv8n
@@ -317,6 +373,86 @@ The vision pipeline runs camera frames through multiple optional modules:
 | `MINIMAL`  | Obstacle detection only                         | Lightweight, fastest performance    |
 | `BALANCED` | Obstacle + Emotion                              | Good balance of features and speed  |
 | `FULL`     | All modules (objects, scene, obstacle, emotion) | Maximum capability, slowest on Pi 4 |
+
+### Performance Management
+
+The pipeline includes two automatic mechanisms to maintain stable frame rates:
+
+- **Thermal Throttling** — When CPU temperature reaches 75°C, frame skip is increased and the profile is downgraded from FULL to BALANCED. Normal operation resumes at 65°C.
+- **Adaptive Load Shedding** — If average frame processing time exceeds the target by 50%, frame skip is incremented. When time drops below 50% of the target, it is restored. Configurable via `ROBOT_ADAPTIVE_SHEDDING` and `ROBOT_TARGET_FRAME_MS`.
+
+### Context Buffer
+
+A 10-frame rolling buffer stores recent vision results. The frame with the most faces (then most objects) is selected as the shared context returned to the LLM, ensuring the best observation is used for responses.
+
+## Hardware Layer
+
+The robot includes a physical motor and servo control system managed by an ESP32 microcontroller communicating over serial UART with the Raspberry Pi.
+
+### Architecture
+
+```
+                    Raspberry Pi 5
+                  ┌──────────────────────┐
+                  │   MotorController    │
+                  │  (PySerial UART)     │
+                  │                      │
+                  │   BatteryMonitor     │
+                  │  (read_line thread)  │
+                  └──────┬───────────────┘
+                         │  UART (115200 baud)
+                         │  RX=GPIO16, TX=GPIO17
+                  ┌──────▼───────────────┐
+                  │      ESP32           │
+                  │  (main.cpp)          │
+                  └──┬───────┬──────┬────┘
+                     │       │      │
+            ┌────────▼─┐ ┌───▼──┐ ┌─▼──────────┐
+            │TB6612FNG │ │Servos│ │Battery ADC  │
+            │Motor Drvr│ │x3    │ │GPIO 34      │
+            └──────────┘ └──────┘ └─────────────┘
+```
+
+### ESP32 Pin Mapping
+
+| Component | Pin | Description |
+|-----------|-----|-------------|
+| PWMA      | 25  | Motor A PWM speed |
+| AIN1/AIN2 | 26/27 | Motor A direction |
+| PWMB      | 14  | Motor B PWM speed |
+| BIN1/BIN2 | 12/13 | Motor B direction |
+| STBY      | 33  | Standby (active HIGH) |
+| SERVO_HEAD | 18 | Head servo PWM (500–2400µs) |
+| SERVO_ARM_R | 19 | Right arm servo PWM |
+| SERVO_ARM_L | 21 | Left arm servo PWM |
+| BATTERY   | 34  | Battery voltage ADC (max 3.3V via divider) |
+| UART RX   | 16  | Receive from Pi |
+| UART TX   | 17  | Transmit to Pi |
+
+### Motor Commands (ESP32)
+
+| Command | Description |
+|---------|-------------|
+| `F`, `B`, `L`, `R` | Forward, backward, turn left, turn right (continuous) |
+| `F2000`, `B1000`, etc. | Movement with auto-stop after ms |
+| `S` | Stop motors |
+| `SPD:150` | Set motor speed (0–255) |
+| `HEAD:90` | Move head servo to angle (0–180) |
+| `ARM_R:90` / `ARM_L:90` | Move arm servos to angle (0–180) |
+| `HAPPY` | Animate both arms (150°/30° → 90°, non-blocking) |
+| `CENTER` | Return all 3 servos to 90° |
+
+The ESP32 also sends battery voltage data every 2 seconds as `BAT:7.45` lines over serial.
+
+### Battery Monitor
+
+The `BatteryMonitor` runs as a background daemon thread that reads `BAT:` lines from the serial connection and triggers warnings or shutdown based on voltage thresholds:
+
+| Threshold | Voltage | Action |
+|-----------|---------|--------|
+| Critical | ≤ 6.8V | Immediate `sudo shutdown -h now` |
+| Low | ≤ 7.2V | Warning + 30-second countdown |
+| Recovery | > 7.2V | Cancels countdown, logs recovery |
 
 ## Remote Shutdown System
 
@@ -381,20 +517,27 @@ The polling client (`robot_shutdown_client.py`) runs as a systemd service (`ropo
 - [x] Mic mute toggle
 - [x] Health check diagnostic tool
 - [x] Adaptive load shedding
+- [x] Wake word detection (fuzzy matching — "روبو" / "ropo")
+- [x] Camera vertical flip (fix for upside-down mount)
+- [x] Face identity tracking (LBP embeddings + session management)
 
-### Phase 2 — Wake Word (In Progress) 🔄
-- [ ] Record wake word dataset ("روبو" / "ropo") — team contribution via record_wake_word.py
-- [ ] Train openwakeword model
-- [ ] Integrate wake word detector before VAD
-- [ ] Test accuracy in classroom environment
+### Phase 2 — Hardware Control ✅
+- [x] ESP32 firmware (TB6612FNG motors + servos + battery ADC)
+- [x] Motor controller Python driver (forward, backward, turn, speed)
+- [x] Servo control (head, left arm, right arm — 0–180°)
+- [x] Head tracking (servo follows largest face)
+- [x] Voice motor commands (Arabic + English)
+- [x] Battery monitor with automatic Pi shutdown
+- [x] HAPPY arm animation (non-blocking state machine)
 
 ### Phase 3 — Raspberry Pi Deployment 🔄
 - [ ] Run setup.sh on Pi 5
 - [ ] Test all pipelines on Pi hardware
-- [ ] Tune performance (frame skips, vision profiles)
+- [ ] Tune performance (frame skips, vision profiles, thermal throttle)
 - [ ] Connect touchscreen display
 - [ ] Test CSI camera with picamera2
-- [ ] GPIO integration (LED status indicators)
+- [ ] Wire ESP32 for motor + servo + battery
+- [ ] Calibrate battery voltage divider ratio
 
 ### Phase 4 — Mobile App 📋
 - [ ] Design mobile app wireframes

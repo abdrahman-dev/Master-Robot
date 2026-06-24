@@ -13,6 +13,13 @@ import pygame
 
 logger = logging.getLogger(__name__)
 
+
+@dataclass
+class BatteryData:
+    percentage: Optional[int] = None
+    voltage: Optional[float] = None
+    charging: bool = False
+
 _PI = math.pi
 
 
@@ -213,6 +220,21 @@ def _settings_cycle(set_s: SettingsState, key: str):
         set_s.mic_muted = not set_s.mic_muted
 
 
+# ── Battery indicator constants ───────────────────────────────────
+
+BATTERY_PAD_RIGHT = 10
+BATTERY_PAD_TOP = 8
+BATTERY_W = 20
+BATTERY_H = 12
+BATTERY_BORDER = 2
+BATTERY_TERM_W = 4
+BATTERY_TERM_H = 6
+BATTERY_COLOR_GREEN = (0, 200, 80)
+BATTERY_COLOR_YELLOW = (220, 200, 0)
+BATTERY_COLOR_RED = (220, 60, 40)
+BATTERY_OUTLINE = (80, 100, 140)
+BATTERY_LOW_THRESHOLD = 20
+
 # ── Face Module ───────────────────────────────────────────────────
 
 PANEL_W = int(480 * 0.85)
@@ -276,6 +298,7 @@ class FaceModule:
         self._wakelock = False
 
         self._state_change_flash = 0.0
+        self._battery_pulse_t = 0.0
 
         self._swipe_callback: Optional[Callable[[str], None]] = None
         self._event_handler: Optional[Callable[[pygame.event.Event], None]] = None
@@ -287,6 +310,9 @@ class FaceModule:
         self._cache: dict = {}
 
         self._particles: Optional[list] = None
+
+        # status indicators
+        self._battery = BatteryData()
 
         # settings panel
         self._settings_open = False
@@ -358,6 +384,11 @@ class FaceModule:
 
     def set_show_overlay(self, show: bool) -> None:
         self._show_overlay = show
+
+    def set_battery_status(self, percentage: Optional[int] = None, voltage: Optional[float] = None, charging: bool = False) -> None:
+        self._battery.percentage = percentage
+        self._battery.voltage = voltage
+        self._battery.charging = charging
 
     def start(self) -> None:
         self._running = True
@@ -454,6 +485,7 @@ class FaceModule:
                 if self._ui.ENABLE_GLOW:
                     self._draw_glow(surf, self.theme)
                 self._draw_status_bar(surf)
+                self._draw_battery_indicator(surf)
                 if self._settings_open:
                     self._draw_settings_panel(surf)
                 if self._show_overlay and self._overlay_text:
@@ -516,6 +548,7 @@ class FaceModule:
 
         self._state_change_flash = max(0.0, self._state_change_flash - dt * 12.0)
         self._selection_flash = max(0.0, self._selection_flash - dt)
+        self._battery_pulse_t += dt
 
         self._idle_timer += dt
         if self._idle_timer > 30.0 and target == FaceState.IDLE and self._wakelock:
@@ -784,6 +817,68 @@ class FaceModule:
                 else:
                     v = font_val.render(val, True, t.panel_value)
                 surf.blit(v, (PANEL_X + PANEL_W - 30 - v.get_width(), y + 14))
+
+    # ── battery indicator ────────────────────────────────────
+
+    def _draw_battery_indicator(self, surf: pygame.Surface) -> None:
+        pct = self._battery.percentage
+        if pct is None:
+            return
+
+        if pct >= 60:
+            fill_color = BATTERY_COLOR_GREEN
+        elif pct >= 30:
+            fill_color = BATTERY_COLOR_YELLOW
+        else:
+            fill_color = BATTERY_COLOR_RED
+
+        fill_w = max(0, int((BATTERY_W - BATTERY_BORDER * 2) * pct / 100.0))
+        fill_h = BATTERY_H - BATTERY_BORDER * 2
+
+        if pct < BATTERY_LOW_THRESHOLD:
+            phase = self._battery_pulse_t * (2.0 * _PI / 1.5)
+            visibility = 0.45 + 0.55 * (0.5 + 0.5 * math.sin(phase))
+            alpha = int(visibility * 255)
+        else:
+            alpha = 255
+
+        x = self.W - BATTERY_PAD_RIGHT - BATTERY_W
+        y = BATTERY_PAD_TOP
+
+        if alpha < 255:
+            temp = pygame.Surface((BATTERY_W + BATTERY_TERM_W, BATTERY_H), pygame.SRCALPHA)
+            draw = temp
+            ox = 0
+            oy = 0
+        else:
+            draw = surf
+            ox = x
+            oy = y
+
+        if fill_w > 0:
+            pygame.draw.rect(draw, fill_color,
+                             (ox + BATTERY_BORDER, oy + BATTERY_BORDER, fill_w, fill_h))
+
+        pygame.draw.rect(draw, BATTERY_OUTLINE,
+                         (ox, oy, BATTERY_W, BATTERY_H), BATTERY_BORDER)
+
+        pygame.draw.rect(draw, BATTERY_OUTLINE,
+                         (ox + BATTERY_W, oy + (BATTERY_H - BATTERY_TERM_H) // 2,
+                          BATTERY_TERM_W, BATTERY_TERM_H))
+
+        if self._battery.charging and fill_w > 4:
+            cx = ox + BATTERY_W // 2
+            cy = oy + BATTERY_H // 2
+            bolt_color = (255, 255, 255)
+            pygame.draw.line(draw, bolt_color, (cx - 2, cy - 3), (cx + 1, cy - 3), 2)
+            pygame.draw.line(draw, bolt_color, (cx + 1, cy - 3), (cx + 1, cy), 2)
+            pygame.draw.line(draw, bolt_color, (cx + 1, cy), (cx - 2, cy + 2), 2)
+            pygame.draw.line(draw, bolt_color, (cx - 2, cy + 2), (cx - 2, cy), 2)
+            pygame.draw.line(draw, bolt_color, (cx - 2, cy), (cx - 3, cy), 2)
+
+        if alpha < 255:
+            temp.set_alpha(alpha)
+            surf.blit(temp, (x, y))
 
     # ── optional extras ───────────────────────────────────────
 

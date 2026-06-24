@@ -171,6 +171,43 @@ class VisionSettings:
 
 
 @dataclass(frozen=True)
+class ServoSettings:
+    head_center_angle: int = 90
+    head_min_angle: int = 0
+    head_max_angle: int = 180
+    arm_left_rest_angle: int = 90
+    arm_right_rest_angle: int = 90
+    happy_right_angle: int = 150
+    happy_left_angle: int = 30
+
+
+@dataclass(frozen=True)
+class MotorSettings:
+    serial_port: str = os.getenv("ROBOT_MOTOR_PORT",
+        "COM3" if not IS_RASPBERRY_PI else "/dev/ttyS0")
+    baudrate: int = int(os.getenv("ROBOT_MOTOR_BAUDRATE", "115200"))
+    serial_timeout_sec: float = 1.0
+    default_speed: int = 150
+
+
+@dataclass(frozen=True)
+class BatterySettings:
+    low_voltage_threshold: float = 7.2
+    critical_voltage_threshold: float = 6.8
+    shutdown_countdown_sec: int = 30
+    poll_interval_sec: float = 0.5
+
+
+@dataclass(frozen=True)
+class HeadTrackingSettings:
+    enabled: bool = True
+    deadband_degrees: int = 5
+    smoothing_factor: float = 0.30
+    invert_camera_mapping: bool = True
+    center_angle: int = 90
+
+
+@dataclass(frozen=True)
 class Settings:
     general: GeneralSettings
     paths: PathSettings
@@ -181,6 +218,10 @@ class Settings:
     vad: VADSettings
     llm: LLMSettings
     tts: TTSSettings
+    servo: ServoSettings
+    motor: MotorSettings
+    battery: BatterySettings
+    head_tracking: HeadTrackingSettings
 
 
 def get_settings() -> Settings:
@@ -194,6 +235,10 @@ def get_settings() -> Settings:
         vad=VADSettings(),
         llm=LLMSettings(),
         tts=TTSSettings(),
+        servo=ServoSettings(),
+        motor=MotorSettings(),
+        battery=BatterySettings(),
+        head_tracking=HeadTrackingSettings(),
     )
 
 
