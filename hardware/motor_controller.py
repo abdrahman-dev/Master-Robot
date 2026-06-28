@@ -1,17 +1,33 @@
 import logging
 import time
+from dataclasses import dataclass
 from typing import Optional
 
 logger = logging.getLogger(__name__)
 
 
+@dataclass(frozen=True)
+class Pose:
+    head: int = 90
+    right_arm: int = 90
+    left_arm: int = 90
+
+
 class MotorController:
-    def __init__(self, port: str = "/dev/ttyS0", baudrate: int = 115200, timeout: float = 1.0):
+    POSE_CENTER = Pose()
+    POSE_IDLE = Pose()
+
+    def __init__(self, port: str = "/dev/serial0", baudrate: int = 115200, timeout: float = 1.0):
         self._port = port
         self._baudrate = baudrate
         self._timeout = timeout
         self._serial: Optional[object] = None
         self._available = False
+
+        self._current_speed: int = 180
+        self._head_angle: int = 90
+        self._right_arm_angle: int = 90
+        self._left_arm_angle: int = 90
 
         try:
             import serial as pyserial
@@ -23,8 +39,12 @@ class MotorController:
         except Exception as e:
             logger.warning("[motor] Could not open %s: %s — motor controller disabled", port, e)
 
+    # ── public helpers ────────────────────────────────────────
+
     def is_available(self) -> bool:
         return self._available
+
+    # ── internal helpers ──────────────────────────────────────
 
     def _send(self, command: str) -> bool:
         if not self._available or self._serial is None:
@@ -39,50 +59,100 @@ class MotorController:
             logger.warning("[motor] Send failed: %s", e)
             return False
 
-    def forward(self, duration_ms: int = 0) -> bool:
+    def _send_motion(self, command: str, duration_ms: int = 0) -> bool:
         if duration_ms > 0:
-            return self._send(f"F{duration_ms}")
-        return self._send("F")
+            return self._send(f"{command}{duration_ms}")
+        return self._send(command)
+
+    def _send_servo(self, name: str, angle: int) -> bool:
+        return self._send(f"{name}:{angle}")
+
+    # ── motion commands ───────────────────────────────────────
+
+    def forward(self, duration_ms: int = 0) -> bool:
+        return self._send_motion("F", duration_ms)
 
     def backward(self, duration_ms: int = 0) -> bool:
-        if duration_ms > 0:
-            return self._send(f"B{duration_ms}")
-        return self._send("B")
+        return self._send_motion("B", duration_ms)
 
     def turn_left(self, duration_ms: int = 0) -> bool:
-        if duration_ms > 0:
-            return self._send(f"L{duration_ms}")
-        return self._send("L")
+        return self._send_motion("L", duration_ms)
 
     def turn_right(self, duration_ms: int = 0) -> bool:
-        if duration_ms > 0:
-            return self._send(f"R{duration_ms}")
-        return self._send("R")
+        return self._send_motion("R", duration_ms)
 
     def stop(self) -> bool:
         return self._send("S")
 
     def set_speed(self, speed: int) -> bool:
         speed = max(0, min(255, int(speed)))
-        return self._send(f"SPD:{speed}")
+        result = self._send(f"SPD:{speed}")
+        if result:
+            self._current_speed = speed
+        return result
+
+    # ── servo commands ────────────────────────────────────────
 
     def move_head(self, angle: int) -> bool:
         angle = max(0, min(180, int(angle)))
-        return self._send(f"HEAD:{angle}")
+        result = self._send_servo("HEAD", angle)
+        if result:
+            self._head_angle = angle
+        return result
 
     def move_arm_right(self, angle: int) -> bool:
         angle = max(0, min(180, int(angle)))
-        return self._send(f"ARM_R:{angle}")
+        result = self._send_servo("ARM_R", angle)
+        if result:
+            self._right_arm_angle = angle
+        return result
 
     def move_arm_left(self, angle: int) -> bool:
         angle = max(0, min(180, int(angle)))
-        return self._send(f"ARM_L:{angle}")
+        result = self._send_servo("ARM_L", angle)
+        if result:
+            self._left_arm_angle = angle
+        return result
 
     def happy(self) -> bool:
         return self._send("HAPPY")
 
     def center_servos(self) -> bool:
+        pose = self.POSE_CENTER
+        self._head_angle = pose.head
+        self._right_arm_angle = pose.right_arm
+        self._left_arm_angle = pose.left_arm
         return self._send("CENTER")
+
+    # ── cached state properties ───────────────────────────────
+
+    @property
+    def speed(self) -> int:
+        return self._current_speed
+
+    @property
+    def head_angle(self) -> int:
+        return self._head_angle
+
+    @property
+    def left_arm_angle(self) -> int:
+        return self._left_arm_angle
+
+    @property
+    def right_arm_angle(self) -> int:
+        return self._right_arm_angle
+
+    # ── pose API ──────────────────────────────────────────────
+
+    def apply_pose(self, head: Optional[int] = None, right_arm: Optional[int] = None, left_arm: Optional[int] = None) -> None:
+        if head is not None:
+            self.move_head(head)
+        if right_arm is not None:
+            self.move_arm_right(right_arm)
+        if left_arm is not None:
+            self.move_arm_left(left_arm)
+
+    # ── serial I/O ────────────────────────────────────────────
 
     def read_line(self) -> Optional[str]:
         """Read one line from ESP32 if available. Returns None if nothing available."""
@@ -96,7 +166,12 @@ class MotorController:
             logger.warning("[motor] Read failed: %s", e)
         return None
 
+    # ── lifecycle ─────────────────────────────────────────────
+
     def close(self):
+        self.stop()
+        self.center_servos()
+        time.sleep(0.15)
         if self._serial is not None and self._serial.is_open:
             try:
                 self._serial.close()

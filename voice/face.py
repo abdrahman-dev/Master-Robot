@@ -7,9 +7,12 @@ import random
 import threading
 from dataclasses import dataclass, field
 from enum import Enum
+from pathlib import Path
 from typing import Optional, Callable, List
 
 import pygame
+
+from voice.text_utils import contains_arabic, reshape_text, wrap_text
 
 logger = logging.getLogger(__name__)
 
@@ -314,6 +317,13 @@ class FaceModule:
         # status indicators
         self._battery = BatteryData()
 
+        # academic caption
+        self._spoken_text: Optional[str] = None
+
+        # speech bubble font (loaded lazily on first use)
+        self._bubble_font: Optional[pygame.font.Font] = None
+        self._bubble_font_path = str(Path(__file__).resolve().parent.parent / "fonts" / "Cairo-Regular.ttf")
+
         # settings panel
         self._settings_open = False
         self._settings = SettingsState()
@@ -389,6 +399,26 @@ class FaceModule:
         self._battery.percentage = percentage
         self._battery.voltage = voltage
         self._battery.charging = charging
+
+    def set_spoken_text(self, text: Optional[str]) -> None:
+        self._spoken_text = text
+
+    def get_spoken_text(self) -> Optional[str]:
+        return self._spoken_text
+
+    def _get_bubble_font(self) -> pygame.font.Font:
+        if self._bubble_font is not None:
+            return self._bubble_font
+        if Path(self._bubble_font_path).is_file():
+            try:
+                self._bubble_font = pygame.font.Font(self._bubble_font_path, self._BUBBLE_FONT_SIZE)
+                logger.info("[face] Loaded bubble font: %s", self._bubble_font_path)
+                return self._bubble_font
+            except Exception as exc:
+                logger.warning("[face] Failed to load bubble font: %s", exc)
+        else:
+            logger.warning("[face] Bubble font not found at %s; using pygame default", self._bubble_font_path)
+        return pygame.font.Font(None, self._BUBBLE_FONT_SIZE)
 
     def start(self) -> None:
         self._running = True
@@ -467,6 +497,12 @@ class FaceModule:
                     self._running = False
                 elif event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
                     self._settings_open = False
+                elif event.type == pygame.KEYDOWN and event.key == pygame.K_f:
+                    self._fullscreen = not self._fullscreen
+                    flags = pygame.FULLSCREEN if self._fullscreen else 0
+                    screen = pygame.display.set_mode((self.W, self.H), flags)
+                    pygame.display.set_caption("Ropo")
+                    logger.info("[face] Fullscreen toggled: %s", self._fullscreen)
                 elif event.type in (pygame.MOUSEBUTTONDOWN, pygame.MOUSEBUTTONUP):
                     self._handle_mouse_event(event)
                 elif self._event_handler:
@@ -486,6 +522,7 @@ class FaceModule:
                     self._draw_glow(surf, self.theme)
                 self._draw_status_bar(surf)
                 self._draw_battery_indicator(surf)
+                self._draw_speech_bubble(surf)
                 if self._settings_open:
                     self._draw_settings_panel(surf)
                 if self._show_overlay and self._overlay_text:
@@ -499,7 +536,15 @@ class FaceModule:
                 fb = font.render("Ropo", True, (0, 120, 255))
                 surf.blit(fb, (self.W // 2 - 24, self.H // 2 - 12))
 
-            screen.blit(surf, (0, 0))
+            if self._fullscreen:
+                info = pygame.display.Info()
+                scale = min(info.current_w / self.W, info.current_h / self.H)
+                sw, sh = int(self.W * scale), int(self.H * scale)
+                scaled = pygame.transform.scale(surf, (sw, sh))
+                screen.fill((0, 0, 0))
+                screen.blit(scaled, ((info.current_w - sw) // 2, (info.current_h - sh) // 2))
+            else:
+                screen.blit(surf, (0, 0))
             pygame.display.flip()
 
         pygame.display.quit()
@@ -879,6 +924,52 @@ class FaceModule:
         if alpha < 255:
             temp.set_alpha(alpha)
             surf.blit(temp, (x, y))
+
+    # ── speech bubble (academic caption) ─────────────────────
+
+    _BUBBLE_MAX_WIDTH = 440
+    _BUBBLE_PAD_X = 16
+    _BUBBLE_PAD_Y = 10
+    _BUBBLE_BOTTOM_MARGIN = 20
+    _BUBBLE_FONT_SIZE = 16
+    _BUBBLE_MAX_LINES = 3
+    _BUBBLE_BG = (18, 22, 40, 210)
+    _BUBBLE_TEXT_COLOR = (220, 230, 255)
+
+    def _draw_speech_bubble(self, surf: pygame.Surface) -> None:
+        raw = self._spoken_text
+        if not raw:
+            return
+
+        font = self._get_bubble_font()
+        is_rtl = contains_arabic(raw)
+
+        display_text = reshape_text(raw)
+
+        max_text_w = min(self._BUBBLE_MAX_WIDTH, self.W - self._BUBBLE_PAD_X * 2) - self._BUBBLE_PAD_X * 2
+        lines = wrap_text(display_text, font, max_text_w)
+        lines = lines[:self._BUBBLE_MAX_LINES]
+
+        line_h = font.get_height() + 4
+        bubble_h = len(lines) * line_h + self._BUBBLE_PAD_Y * 2
+        bubble_w = min(self._BUBBLE_MAX_WIDTH, self.W - self._BUBBLE_PAD_X * 2)
+        bx = (self.W - bubble_w) // 2
+        by = self.H - self._BUBBLE_BOTTOM_MARGIN - bubble_h - 16
+
+        bsurf = pygame.Surface((bubble_w, bubble_h), pygame.SRCALPHA)
+        bsurf.fill(self._BUBBLE_BG)
+        pygame.draw.rect(bsurf, (*self._BUBBLE_BG[:3], 220),
+                         (0, 0, bubble_w, bubble_h), border_radius=8)
+        surf.blit(bsurf, (bx, by))
+
+        for i, line in enumerate(lines):
+            rendered = font.render(line, True, self._BUBBLE_TEXT_COLOR)
+            if is_rtl:
+                lw, _ = rendered.get_size()
+                x = bx + bubble_w - self._BUBBLE_PAD_X - lw
+            else:
+                x = bx + self._BUBBLE_PAD_X
+            surf.blit(rendered, (x, by + self._BUBBLE_PAD_Y + i * line_h))
 
     # ── optional extras ───────────────────────────────────────
 

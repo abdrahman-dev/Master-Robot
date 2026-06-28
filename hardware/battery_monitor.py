@@ -95,7 +95,10 @@ class BatteryMonitor:
                 logger.info("[battery] Voltage recovered to %.2fV", voltage)
             self._warning_started = None
 
-    @staticmethod
-    def _do_shutdown() -> None:
+    def _do_shutdown(self) -> None:
+        logger.critical("[battery] Sending stop/center to motors...")
+        self._motor.stop()
+        self._motor.center_servos()
+        time.sleep(0.15)
         logger.critical("[battery] Executing: sudo shutdown -h now")
         os.system("sudo shutdown -h now")

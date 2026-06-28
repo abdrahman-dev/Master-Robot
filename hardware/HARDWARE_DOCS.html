@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hardware Layer Documentation</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Inter', sans-serif; background: #f8fafc; color: #1e293b; line-height: 1.7; font-size: 14px; }
+  .container { max-width: 960px; margin: 0 auto; padding: 40px 24px; }
+  h1 { font-size: 2.4rem; font-weight: 700; letter-spacing: -0.02em; margin-bottom: 8px; color: #0f172a; }
+  h2 { font-size: 1.6rem; font-weight: 600; margin: 40px 0 16px; padding-bottom: 8px; border-bottom: 2px solid #e2e8f0; color: #0f172a; }
+  h3 { font-size: 1.2rem; font-weight: 600; margin: 28px 0 12px; color: #1e293b; }
+  h4 { font-size: 1rem; font-weight: 600; margin: 20px 0 8px; color: #334155; }
+  p, li { margin-bottom: 12px; color: #475569; }
+  ul, ol { padding-left: 24px; margin-bottom: 16px; }
+  li { margin-bottom: 6px; }
+  .subtitle { font-size: 1rem; color: #64748b; margin-bottom: 32px; }
+  code { font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; background: #f1f5f9; padding: 2px 6px; border-radius: 4px; color: #0f172a; }
+  pre { background: #1e293b; color: #e2e8f0; padding: 16px 20px; border-radius: 8px; overflow-x: auto; font-size: 0.82rem; line-height: 1.5; margin: 16px 0 24px; }
+  pre code { background: none; padding: 0; color: inherit; font-size: inherit; }
+  table { width: 100%; border-collapse: collapse; margin: 16px 0 24px; font-size: 0.9rem; }
+  th, td { border: 1px solid #e2e8f0; padding: 10px 14px; text-align: left; }
+  th { background: #f1f5f9; font-weight: 600; color: #0f172a; }
+  td { background: #fff; }
+  .screenshot { background: linear-gradient(135deg, #e2e8f0, #f1f5f9); border: 2px dashed #94a3b8; border-radius: 8px; padding: 40px 20px; text-align: center; margin: 16px 0 24px; color: #64748b; font-weight: 500; }
+  .screenshot strong { display: block; margin-bottom: 6px; color: #334155; font-size: 0.95rem; }
+  .screenshot .dim { font-size: 0.8rem; color: #94a3b8; }
+  .callout { background: #eff6ff; border-left: 4px solid #3b82f6; padding: 14px 18px; border-radius: 0 8px 8px 0; margin: 16px 0 24px; }
+  .callout.warn { background: #fef3c7; border-left-color: #f59e0b; }
+  .callout.info { background: #f0fdf4; border-left-color: #22c55e; }
+  .callout.danger { background: #fef2f2; border-left-color: #ef4444; }
+  .tag { display: inline-block; font-size: 0.72rem; font-weight: 600; padding: 2px 8px; border-radius: 12px; margin-right: 4px; }
+  .tag.purple { background: #ede9fe; color: #7c3aed; }
+  .tag.blue { background: #dbeafe; color: #2563eb; }
+  .tag.green { background: #dcfce7; color: #16a34a; }
+  .tag.orange { background: #fed7aa; color: #ea580c; }
+  .tag.red { background: #fecaca; color: #dc2626; }
+  .flow { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 8px; margin: 20px 0 28px; padding: 16px; background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; }
+  .flow-item { background: #3b82f6; color: #fff; padding: 8px 14px; border-radius: 6px; font-size: 0.82rem; font-weight: 500; }
+  .flow-arrow { color: #94a3b8; font-size: 1.1rem; }
+  .flow-item.green { background: #22c55e; }
+  .flow-item.purple { background: #8b5cf6; }
+  .flow-item.orange { background: #f59e0b; }
+  .flow-item.dark { background: #475569; }
+  @media print { body { background: #fff; font-size: 12px; } .container { max-width: 100%; padding: 20px; } pre { background: #f1f5f9 !important; color: #1e293b !important; } .screenshot { break-inside: avoid; } h2, h3 { break-after: avoid; } }
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>Hardware Layer Documentation</h1>
+<p class="subtitle">Educational Robot — Motor Control, Servo Actuation, Battery Monitoring &amp; ESP32 Communication</p>
+
+<!-- ================================================================== -->
+<h2>1. Folder Purpose</h2>
+<p>
+The <code>hardware/</code> package provides the complete hardware abstraction layer for the Rope educational robot. It is responsible for bridging high-level Python control logic with low-level microcontroller firmware running on an ESP32. The system supports:
+</p>
+<ul>
+  <li><strong>Motor control</strong> — TB6612FNG dual motor driver driving two DC motors (forward, backward, turn, stop, timed movement)</li>
+  <li><strong>Servo control</strong> — three servos for expressive head and arm movement</li>
+  <li><strong>Battery monitoring</strong> — voltage monitoring via ESP32 ADC with automatic low-battery shutdown</li>
+  <li><strong>Serial communication</strong> — UART-based command/response protocol between Raspberry Pi and ESP32</li>
+</ul>
+
+<div class="callout info">
+  <strong>Target Microcontroller:</strong> ESP32 DevKit V1 (DOIT) flashed via PlatformIO. The firmware uses the Arduino framework with ESP32Servo library and LEDC PWM for motor drive.
+</div>
+
+<!-- ================================================================== -->
+<h2>2. Architecture Overview</h2>
+<p>
+The hardware layer follows a <strong>command-response pattern</strong> over a UART serial link. The Raspberry Pi (Python process) sends ASCII commands over TX/RX to the ESP32, which interprets them and drives the physical hardware. Status and battery voltage are streamed back to the Pi.
+</p>
+
+<div class="flow">
+  <span class="flow-item">Python App</span>
+  <span class="flow-arrow">→</span>
+  <span class="flow-item green">MotorController</span>
+  <span class="flow-arrow">→</span>
+  <span class="flow-item dark">UART Serial</span>
+  <span class="flow-arrow">→</span>
+  <span class="flow-item purple">ESP32 Firmware</span>
+  <span class="flow-arrow">→</span>
+  <span class="flow-item orange">TB6612FNG</span>
+  <span class="flow-arrow">→</span>
+  <span class="flow-item">DC Motors</span>
+</div>
+
+<div class="flow">
+  <span class="flow-item purple">ESP32 Firmware</span>
+  <span class="flow-arrow">→</span>
+  <span class="flow-item orange">Servo HEAD (GPIO 18)</span>
+  <span class="flow-arrow">→</span>
+  <span class="flow-item orange">Servo ARM_R (GPIO 19)</span>
+  <span class="flow-arrow">→</span>
+  <span class="flow-item orange">Servo ARM_L (GPIO 21)</span>
+</div>
+
+<div class="flow">
+  <span class="flow-item purple">ESP32 Firmware</span>
+  <span class="flow-arrow">→</span>
+  <span class="flow-item orange">Battery ADC (GPIO 34)</span>
+  <span class="flow-arrow">→</span>
+  <span class="flow-item dark">Voltage Reading</span>
+  <span class="flow-arrow">→</span>
+  <span class="flow-item green">BatteryMonitor</span>
+</div>
+
+<p>
+All hardware access is mediated through two Python classes: <code>MotorController</code> (serial communication with ESP32) and <code>BatteryMonitor</code> (voltage-based shutdown logic). The ESP32 firmware is a single <code>main.cpp</code> compiled with PlatformIO.
+</p>
+
+<!-- ================================================================== -->
+<h2>3. Files Overview</h2>
+<table>
+  <thead>
+    <tr><th>File</th><th>Lines</th><th>Role</th><th>Key Classes / Functions</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>motor_controller.py</code></td><td>~106</td><td>Python serial driver for ESP32</td><td><code>MotorController</code></td></tr>
+    <tr><td><code>battery_monitor.py</code></td><td>~101</td><td>Voltage monitoring &amp; auto-shutdown</td><td><code>BatteryMonitor</code></td></tr>
+    <tr><td><code>esp32/main.cpp</code></td><td>~287</td><td>ESP32 firmware — motors, servos, battery ADC</td><td><code>setup()</code>, <code>loop()</code>, <code>handle_command()</code></td></tr>
+    <tr><td><code>esp32/platformio.ini</code></td><td>6</td><td>PlatformIO build configuration</td><td>—</td></tr>
+    <tr><td><code>__init__.py</code></td><td>1</td><td>Package marker</td><td>—</td></tr>
+  </tbody>
+</table>
+
+<!-- ================================================================== -->
+<h2>4. PlatformIO Configuration</h2>
+<pre><code>[env:esp32dev]
+platform = espressif32
+board = esp32dev
+framework = arduino
+monitor_speed = 115200
+upload_speed = 921600</code></pre>
+<ul>
+  <li><strong>Board:</strong> ESP32 DevKit (esp32dev)</li>
+  <li><strong>Framework:</strong> Arduino (uses Arduino core for ESP32)</li>
+  <li><strong>Monitor speed:</strong> 115200 baud (must match <code>Serial.begin()</code> in firmware)</li>
+  <li><strong>Upload speed:</strong> 921600 for fast flashing</li>
+</ul>
+<p>The firmware depends on the <code>ESP32Servo</code> library for servo actuation. Install via PlatformIO's library manager or add to <code>platformio.ini</code>:</p>
+<pre><code>lib_deps =
+  ESP32Servo</code></pre>
+
+<!-- ================================================================== -->
+<h2>5. ESP32 Pin Assignment</h2>
+<table>
+  <thead>
+    <tr><th>Component</th><th>Pin</th><th>ESP32 GPIO</th><th>Notes</th></tr>
+  </thead>
+  <tbody>
+    <tr><td colspan="4" style="background:#f1f5f9; font-weight:600;">TB6612FNG Motor Driver</td></tr>
+    <tr><td>PWMA</td><td>25</td><td>GPIO 25</td><td>Motor A PWM (LEDC channel 0, 1 kHz, 8-bit)</td></tr>
+    <tr><td>AIN1</td><td>26</td><td>GPIO 26</td><td>Motor A direction 1</td></tr>
+    <tr><td>AIN2</td><td>27</td><td>GPIO 27</td><td>Motor A direction 2</td></tr>
+    <tr><td>PWMB</td><td>14</td><td>GPIO 14</td><td>Motor B PWM (LEDC channel 1, 1 kHz, 8-bit)</td></tr>
+    <tr><td>BIN1</td><td>12</td><td>GPIO 12</td><td>Motor B direction 1</td></tr>
+    <tr><td>BIN2</td><td>13</td><td>GPIO 13</td><td>Motor B direction 2</td></tr>
+    <tr><td>STBY</td><td>33</td><td>GPIO 33</td><td>Standby (active HIGH — pulled HIGH in setup)</td></tr>
+    <tr><td colspan="4" style="background:#f1f5f9; font-weight:600;">Servos</td></tr>
+    <tr><td>SERVO_HEAD</td><td>18</td><td>GPIO 18</td><td>Head tilt servo (500–2400 µs pulse)</td></tr>
+    <tr><td>SERVO_ARM_R</td><td>19</td><td>GPIO 19</td><td>Right arm servo (500–2400 µs pulse)</td></tr>
+    <tr><td>SERVO_ARM_L</td><td>21</td><td>GPIO 21</td><td>Left arm servo (500–2400 µs pulse)</td></tr>
+    <tr><td colspan="4" style="background:#f1f5f9; font-weight:600;">Battery</td></tr>
+    <tr><td>BATTERY_ADC</td><td>34</td><td>GPIO 34</td><td>Battery voltage divider input (0–3.3V scaled, divider ratio 3:1)</td></tr>
+    <tr><td colspan="4" style="background:#f1f5f9; font-weight:600;">UART Serial (to Raspberry Pi)</td></tr>
+    <tr><td>RX</td><td>16</td><td>GPIO 16 (UART2 RX)</td><td>Receive commands from Pi</td></tr>
+    <tr><td>TX</td><td>17</td><td>GPIO 17 (UART2 TX)</td><td>Send responses / battery data to Pi</td></tr>
+  </tbody>
+</table>
+
+<div class="callout warn">
+  <strong>Note:</strong> GPIO 12 (BIN1) is a strapping pin on ESP32. Avoid pulling it HIGH during boot. The TB6612FNG uses internal pull-downs, so this is safe. If using different hardware, ensure GPIO 12 is LOW at startup.
+</div>
+
+<!-- ================================================================== -->
+<h2>6. Serial Command Protocol</h2>
+<p>
+Commands are ASCII strings sent from the Raspberry Pi (via <code>MotorController._send()</code>) to the ESP32 over Serial2 (UART2, GPIO 16/17). Each command is terminated with <code>\n</code>. The ESP32 responds on both Serial2 (back to Pi) and Serial (USB debug).
+</p>
+
+<h3>6.1 Motor Commands (Pi → ESP32)</h3>
+<table>
+  <thead>
+    <tr><th>Command</th><th>Example</th><th>Action</th><th>Response</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>F</code></td><td><code>F\n</code></td><td>Move forward continuously</td><td><code>OK:F</code></td></tr>
+    <tr><td><code>F&lt;ms&gt;</code></td><td><code>F2000\n</code></td><td>Move forward for &lt;ms&gt; milliseconds, then stop</td><td><code>OK:F2000</code></td></tr>
+    <tr><td><code>B</code></td><td><code>B\n</code></td><td>Move backward continuously</td><td><code>OK:B</code></td></tr>
+    <tr><td><code>B&lt;ms&gt;</code></td><td><code>B1500\n</code></td><td>Move backward for &lt;ms&gt; milliseconds, then stop</td><td><code>OK:B1500</code></td></tr>
+    <tr><td><code>L</code></td><td><code>L\n</code></td><td>Turn left (Motor A backward, Motor B forward)</td><td><code>OK:L</code></td></tr>
+    <tr><td><code>L&lt;ms&gt;</code></td><td><code>L1000\n</code></td><td>Turn left for &lt;ms&gt; milliseconds, then stop</td><td><code>OK:L1000</code></td></tr>
+    <tr><td><code>R</code></td><td><code>R\n</code></td><td>Turn right (Motor A forward, Motor B backward)</td><td><code>OK:R</code></td></tr>
+    <tr><td><code>R&lt;ms&gt;</code></td><td><code>R800\n</code></td><td>Turn right for &lt;ms&gt; milliseconds, then stop</td><td><code>OK:R800</code></td></tr>
+    <tr><td><code>S</code></td><td><code>S\n</code></td><td>Stop both motors immediately (sets PWM to 0)</td><td><code>STOPPED</code></td></tr>
+    <tr><td><code>SPD:&lt;n&gt;</code></td><td><code>SPD:200\n</code></td><td>Set motor speed (0–255). Default: 180. Constrained to [0, 255].</td><td><code>OK:SPD:200</code></td></tr>
+  </tbody>
+</table>
+
+<h3>6.2 Servo Commands (Pi → ESP32)</h3>
+<table>
+  <thead>
+    <tr><th>Command</th><th>Example</th><th>Action</th><th>Response</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>HEAD:&lt;angle&gt;</code></td><td><code>HEAD:45\n</code></td><td>Set head servo angle (0–180, constrained)</td><td><code>OK:HEAD:45</code></td></tr>
+    <tr><td><code>ARM_R:&lt;angle&gt;</code></td><td><code>ARM_R:150\n</code></td><td>Set right arm servo angle (0–180, constrained)</td><td><code>OK:ARM_R:150</code></td></tr>
+    <tr><td><code>ARM_L:&lt;angle&gt;</code></td><td><code>ARM_L:30\n</code></td><td>Set left arm servo angle (0–180, constrained)</td><td><code>OK:ARM_L:30</code></td></tr>
+    <tr><td><code>CENTER</code></td><td><code>CENTER\n</code></td><td>Move all servos to 90° (center position)</td><td><code>OK:CENTER</code></td></tr>
+  </tbody>
+</table>
+
+<h3>6.3 Animation Commands (Pi → ESP32)</h3>
+<table>
+  <thead>
+    <tr><th>Command</th><th>Example</th><th>Action</th><th>Response</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>HAPPY</code></td><td><code>HAPPY\n</code></td><td>Run non-blocking arm wave animation (arms swing out, ~1s, then respond)</td><td><code>OK:HAPPY</code> (after animation completes)</td></tr>
+  </tbody>
+</table>
+
+<h3>6.4 Telemetry Stream (ESP32 → Pi, unsolicited)</h3>
+<table>
+  <thead>
+    <tr><th>Message</th><th>Example</th><th>Frequency</th><th>Source</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>BAT:&lt;voltage&gt;</code></td><td><code>BAT:8.12</code></td><td>Every 2 seconds</td><td><code>loop()</code> — 10-sample averaged ADC reading</td></tr>
+    <tr><td><code>STOPPED</code></td><td><code>STOPPED</code></td><td>When timed movement expires</td><td><code>loop()</code> — after <code>_move_until</code> elapses</td></tr>
+  </tbody>
+</table>
+
+<h3>6.5 Error Responses</h3>
+<table>
+  <thead>
+    <tr><th>Response</th><th>Meaning</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>ERR:unknown</code></td><td>Unrecognised or malformed command</td></tr>
+  </tbody>
+</table>
+
+<!-- ================================================================== -->
+<h2>7. <code>motor_controller.py</code> — MotorController</h2>
+<p>
+The <code>MotorController</code> class is the Python-side serial driver. It communicates with the ESP32 over a UART connection, sending ASCII commands and reading responses.
+</p>
+
+<h3>7.1 Constructor</h3>
+<pre><code>MotorController(port="/dev/ttyS0", baudrate=115200, timeout=1.0)</code></pre>
+<ul>
+  <li><code>port</code> — serial port device path (<code>COM3</code> on Windows, <code>/dev/ttyS0</code> on Raspberry Pi)</li>
+  <li><code>baudrate</code> — communication speed (must match ESP32 firmware: 115200)</li>
+  <li><code>timeout</code> — serial read timeout in seconds</li>
+</ul>
+<p>If <code>pyserial</code> is not installed or the port cannot be opened, the controller logs a warning and sets <code>is_available()</code> to <code>False</code>. All methods gracefully return <code>False</code> when unavailable.</p>
+
+<h3>7.2 Public Methods</h3>
+<table>
+  <thead>
+    <tr><th>Method</th><th>Parameters</th><th>Returns</th><th>Description</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>is_available()</code></td><td>—</td><td><code>bool</code></td><td>Whether the serial port is open and ready</td></tr>
+    <tr><td><code>forward(duration_ms=0)</code></td><td><code>duration_ms: int</code></td><td><code>bool</code></td><td>Move forward (continuous if 0, timed if &gt;0)</td></tr>
+    <tr><td><code>backward(duration_ms=0)</code></td><td><code>duration_ms: int</code></td><td><code>bool</code></td><td>Move backward (continuous if 0, timed if &gt;0)</td></tr>
+    <tr><td><code>turn_left(duration_ms=0)</code></td><td><code>duration_ms: int</code></td><td><code>bool</code></td><td>Turn left (continuous if 0, timed if &gt;0)</td></tr>
+    <tr><td><code>turn_right(duration_ms=0)</code></td><td><code>duration_ms: int</code></td><td><code>bool</code></td><td>Turn right (continuous if 0, timed if &gt;0)</td></tr>
+    <tr><td><code>stop()</code></td><td>—</td><td><code>bool</code></td><td>Stop both motors immediately</td></tr>
+    <tr><td><code>set_speed(speed)</code></td><td><code>speed: int</code> (0–255)</td><td><code>bool</code></td><td>Set motor PWM duty cycle (clamped)</td></tr>
+    <tr><td><code>move_head(angle)</code></td><td><code>angle: int</code> (0–180)</td><td><code>bool</code></td><td>Set head servo angle (clamped)</td></tr>
+    <tr><td><code>move_arm_right(angle)</code></td><td><code>angle: int</code> (0–180)</td><td><code>bool</code></td><td>Set right arm servo angle (clamped)</td></tr>
+    <tr><td><code>move_arm_left(angle)</code></td><td><code>angle: int</code> (0–180)</td><td><code>bool</code></td><td>Set left arm servo angle (clamped)</td></tr>
+    <tr><td><code>happy()</code></td><td>—</td><td><code>bool</code></td><td>Trigger arm wave animation</td></tr>
+    <tr><td><code>center_servos()</code></td><td>—</td><td><code>bool</code></td><td>Set all servos to 90°</td></tr>
+    <tr><td><code>read_line()</code></td><td>—</td><td><code>Optional[str]</code></td><td>Read one line from ESP32. Returns <code>None</code> if nothing available.</td></tr>
+    <tr><td><code>close()</code></td><td>—</td><td><code>None</code></td><td>Close the serial port</td></tr>
+  </tbody>
+</table>
+
+<h3>7.3 Internal Method: <code>_send(command)</code></h3>
+<p>
+Encodes the command with <code>\n</code> terminator, writes to the serial port, and waits 50 ms for the ESP32 to process. Returns <code>True</code> on success, <code>False</code> if unavailable or write fails. All public motor/servo methods delegate to <code>_send()</code>.
+</p>
+
+<div class="callout">
+  <strong>Behaviour Note:</strong> <code>_send()</code> does not wait for or validate the response from the ESP32. For timed movement commands (<code>F2000</code>, <code>B1500</code>, etc.), the ESP32 handles the stop internally using <code>millis()</code> in <code>loop()</code>, not from a Pi command.
+</div>
+
+<!-- ================================================================== -->
+<h2>8. <code>battery_monitor.py</code> — BatteryMonitor</h2>
+<p>
+The <code>BatteryMonitor</code> class runs a background thread that continuously reads battery voltage lines (<code>BAT:&lt;voltage&gt;</code>) sent by the ESP32 every 2 seconds. It implements a two-tier voltage threshold system with automatic Pi shutdown.
+</p>
+
+<h3>8.1 Thresholds</h3>
+<table>
+  <thead>
+    <tr><th>Voltage Range</th><th>Status</th><th>Action</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>&gt; 7.2 V</td><td><span class="tag green">Normal</span></td><td>No action. Resets warning countdown if previously low.</td></tr>
+    <tr><td>6.9 V – 7.2 V</td><td><span class="tag orange">Low</span></td><td>Log warning, fire <code>on_low_battery</code> callback, start 30-second shutdown countdown. If voltage recovers above 7.2 V, cancel countdown.</td></tr>
+    <tr><td>&le; 6.8 V</td><td><span class="tag red">Critical</span></td><td>Immediate shutdown. Fire <code>on_shutdown</code> callback, execute <code>sudo shutdown -h now</code>.</td></tr>
+  </tbody>
+</table>
+
+<h3>8.2 Constructor</h3>
+<pre><code>BatteryMonitor(motor_controller, on_low_battery=None, on_shutdown=None, on_update=None)</code></pre>
+<ul>
+  <li><code>motor_controller</code> — a <code>MotorController</code> instance (used to call <code>read_line()</code>)</li>
+  <li><code>on_low_battery(voltage)</code> — optional callback when voltage drops to warning threshold</li>
+  <li><code>on_shutdown()</code> — optional callback executed before OS shutdown</li>
+  <li><code>on_update(voltage)</code> — optional callback on every voltage reading update</li>
+</ul>
+
+<h3>8.3 Public Methods</h3>
+<table>
+  <thead>
+    <tr><th>Method</th><th>Description</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>start()</code></td><td>Start the background monitoring thread. No-op if motor controller unavailable.</td></tr>
+    <tr><td><code>stop()</code></td><td>Signal the monitoring thread to stop.</td></tr>
+    <tr><td><code>get_voltage()</code></td><td>Return the latest voltage reading (thread-safe). Returns 99.0 if no reading yet.</td></tr>
+  </tbody>
+</table>
+
+<h3>8.4 Thread Operation (<code>_run()</code>)</h3>
+<ol>
+  <li>Every 0.5 seconds, call <code>motor_controller.read_line()</code>.</li>
+  <li>If a line starts with <code>BAT:</code>, parse the voltage value, store it, and call <code>_check_voltage()</code>.</li>
+  <li><code>_check_voltage()</code> applies the threshold logic (normal / low / critical).</li>
+  <li>On countdown expiry (<code>WARN_COUNTDOWN_SECONDS = 30</code>), execute <code>sudo shutdown -h now</code> via <code>os.system()</code>.</li>
+</ol>
+
+<div class="callout danger">
+  <strong>Shutdown Behaviour:</strong> <code>_do_shutdown()</code> calls <code>os.system("sudo shutdown -h now")</code>. This requires the Python process to have passwordless sudo access for the <code>shutdown</code> command. Configure this in <code>/etc/sudoers</code> if not already set.
+</div>
+
+<!-- ================================================================== -->
+<h2>9. ESP32 Firmware (<code>main.cpp</code>) — Detailed Explanation</h2>
+
+<h3>9.1 Setup Sequence</h3>
+<ol>
+  <li><strong>Serial init</strong> — <code>Serial.begin(115200)</code> for USB debug, <code>Serial2.begin(115200, SERIAL_8N1, 16, 17)</code> for UART communication with the Pi.</li>
+  <li><strong>GPIO setup</strong> — all TB6612FNG control pins (<code>AIN1</code>, <code>AIN2</code>, <code>BIN1</code>, <code>BIN2</code>, <code>STBY</code>) set as <code>OUTPUT</code>. Battery ADC pin set as <code>INPUT</code>.</li>
+  <li><strong>PWM setup</strong> — two LEDC channels (channel 0 for PWMA, channel 1 for PWMB), 1 kHz frequency, 8-bit resolution.</li>
+  <li><strong>STBY</strong> — pulled HIGH to enable the TB6612FNG motor driver.</li>
+  <li><strong>Servo attach</strong> — three servos attached to GPIOs 18, 19, 21 with 500–2400 µs pulse range. All servos set to 90°.</li>
+  <li><strong>Motors stopped</strong> — ensure both motors are OFF at startup.</li>
+  <li><strong>Ready message</strong> — <code>"ROPE Motor Controller Ready"</code> printed on both Serial and Serial2.</li>
+</ol>
+
+<h3>9.2 Main Loop</h3>
+<p>The <code>loop()</code> function performs three tasks on every iteration:</p>
+<ul>
+  <li><strong>Timed movement expiry</strong> — If <code>_move_until &gt; 0</code> and <code>millis() &gt;= _move_until</code>, call <code>motors_stop()</code> and send <code>STOPPED</code>.</li>
+  <li><strong>Battery reading</strong> — Every 2 seconds (<code>BATTERY_INTERVAL</code>), read the ADC pin 10 times with 500 µs spacing, average, convert to voltage (<code>ADC / 4095.0 * 3.3 * 3.0</code>), and send <code>BAT:&lt;voltage&gt;</code> on Serial2.</li>
+  <li><strong>Command processing</strong> — If data is available on Serial2, read until <code>\n</code>, trim whitespace, and pass to <code>handle_command()</code>.</li>
+</ul>
+
+<h3>9.3 HAPPY Animation State Machine</h3>
+<p>The HAPPY animation is a non-blocking 3-phase state machine triggered by the <code>HAPPY</code> command:</p>
+<table>
+  <thead>
+    <tr><th>Phase</th><th>Time</th><th>Action</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>0 → 1</td><td>Immediate (0 ms)</td><td>Set right arm to 150°, left arm to 30° (arms up and out)</td></tr>
+    <tr><td>1 → 2</td><td>500 ms elapsed</td><td>Return both arms to 90° (arms back to rest)</td></tr>
+    <tr><td>2 → Done</td><td>1000 ms elapsed</td><td>Reset flags, respond <code>OK:HAPPY</code></td></tr>
+  </tbody>
+</table>
+<p>The <code>happyActive</code> flag prevents re-entry. During the animation, the loop continues to check expiry, read battery, and accept new commands (new commands will move the servos out of their animation pose).</p>
+
+<h3>9.4 Motor Control</h3>
+<p>The TB6612FNG uses two H-bridges controlled by direction pins (<code>AIN1/AIN2</code> for Motor A, <code>BIN1/BIN2</code> for Motor B) and PWM duty cycle via LEDC:</p>
+<table>
+  <thead>
+    <tr><th>State</th><th>AIN1</th><th>AIN2</th><th>BIN1</th><th>BIN2</th><th>Direction</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>Forward</td><td>HIGH</td><td>LOW</td><td>HIGH</td><td>LOW</td><td>Both motors forward</td></tr>
+    <tr><td>Backward</td><td>LOW</td><td>HIGH</td><td>LOW</td><td>HIGH</td><td>Both motors backward</td></tr>
+    <tr><td>Turn Left</td><td>LOW</td><td>HIGH</td><td>HIGH</td><td>LOW</td><td>Motor A back, Motor B forward</td></tr>
+    <tr><td>Turn Right</td><td>HIGH</td><td>LOW</td><td>LOW</td><td>HIGH</td><td>Motor A forward, Motor B back</td></tr>
+    <tr><td>Stop</td><td>LOW</td><td>LOW</td><td>LOW</td><td>LOW</td><td>Both motors coast</td></tr>
+  </tbody>
+</table>
+<p>PWM duty cycle (0–255) is written via <code>ledcWrite()</code>. The default speed is 180. Motor power is provided by the battery; the TB6612FNG handles direction and braking via the H-bridge.</p>
+
+<h3>9.5 Battery Voltage Reading</h3>
+<p>The battery is read via a voltage divider on GPIO 34 (ADC channel 6):</p>
+<pre><code>sum = 0
+for (int i = 0; i &lt; 10; i++) {
+  sum += analogRead(BATTERY_PIN);
+  delayMicroseconds(500);
+}
+float adc = sum / 10.0;
+float vPin = (adc / ADC_MAX) * VREF;   // VREF = 3.3V, ADC_MAX = 4095
+float vBatt = vPin * DIV_RATIO;         // DIV_RATIO = 3.0</code></pre>
+<p>The divider ratio is 3:1, so a 8.4 V battery (fully charged 2S LiPo) reads as 2.8 V at the ADC pin, which maps to ~3476 ADC counts. A 10-sample average with 500 µs spacing filters noise.</p>
+
+<div class="callout warn">
+  <strong>Calibration:</strong> The actual divider resistors (<code>DIV_RATIO</code>) must match the hardware. If using a different divider, update <code>DIV_RATIO</code> in <code>main.cpp</code> and re-flash. The Python <code>BatteryMonitor</code> thresholds (6.8 V / 7.2 V) assume a 2S LiPo chemistry (6.8 V empty, 8.4 V full).
+</div>
+
+<!-- ================================================================== -->
+<h2>10. Wiring Guide</h2>
+<table>
+  <thead>
+    <tr><th>Raspberry Pi</th><th>ESP32</th><th>Notes</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>GPIO 14 (TXD)</td><td>GPIO 16 (UART2 RX)</td><td>Pi transmits → ESP32 receives</td></tr>
+    <tr><td>GPIO 15 (RXD)</td><td>GPIO 17 (UART2 TX)</td><td>Pi receives ← ESP32 transmits</td></tr>
+    <tr><td>GND</td><td>GND</td><td>Common ground required</td></tr>
+    <tr><td colspan="3" style="background:#f1f5f9; font-weight:600;">TB6612FNG Motor Driver (connected to ESP32)</td></tr>
+    <tr><td colspan="2">PWMA → GPIO 25</td><td>Motor A PWM signal</td></tr>
+    <tr><td colspan="2">AIN1 → GPIO 26</td><td>Motor A direction 1</td></tr>
+    <tr><td colspan="2">AIN2 → GPIO 27</td><td>Motor A direction 2</td></tr>
+    <tr><td colspan="2">PWMB → GPIO 14</td><td>Motor B PWM signal</td></tr>
+    <tr><td colspan="2">BIN1 → GPIO 12</td><td>Motor B direction 1</td></tr>
+    <tr><td colspan="2">BIN2 → GPIO 13</td><td>Motor B direction 2</td></tr>
+    <tr><td colspan="2">STBY → GPIO 33</td><td>Standby (HIGH = enabled)</td></tr>
+    <tr><td colspan="2">VMOT → Battery +</td><td>Motor power supply (direct from battery)</td></tr>
+    <tr><td colspan="2">GND → Battery −</td><td>Common ground with ESP32</td></tr>
+    <tr><td colspan="3" style="background:#f1f5f9; font-weight:600;">Servo connections</td></tr>
+    <tr><td colspan="2">Head Servo → GPIO 18</td><td>Signal wire (5V power from ESP32 VIN or external BEC)</td></tr>
+    <tr><td colspan="2">Right Arm Servo → GPIO 19</td><td>Signal wire</td></tr>
+    <tr><td colspan="2">Left Arm Servo → GPIO 21</td><td>Signal wire</td></tr>
+    <tr><td colspan="3" style="background:#f1f5f9; font-weight:600;">Battery monitoring</td></tr>
+    <tr><td colspan="2">Battery + → Voltage Divider → GPIO 34</td><td>3:1 resistive divider (e.g., 2×10 kΩ + 1×5 kΩ)</td></tr>
+    <tr><td colspan="2">Battery − → GND</td><td>Common ground</td></tr>
+  </tbody>
+</table>
+
+<div class="callout warn">
+  <strong>Power Supply:</strong> The ESP32 can be powered from the Raspberry Pi's 5V pin or from a separate battery BEC. The TB6612FNG's <code>VMOT</code> must connect directly to the battery (it handles 2.5–12 V). Do not power servos from the ESP32's 3.3V rail — use a separate 5V BEC or the Pi's 5V pin if current permits.
+</div>
+
+<div class="callout info">
+  <strong>Voltage Divider Design:</strong> For a 2S LiPo (max 8.4 V), use a 3:1 divider so that <code>Vout = Vin / 3</code>. At 8.4 V, <code>Vout = 2.8 V</code> — safe for ESP32 ADC (max 3.3 V). Use precision resistors (1% tolerance). Example: 20 kΩ + 10 kΩ (R<sub>top</sub> = 20 kΩ, R<sub>bottom</sub> = 10 kΩ) gives <code>Vout = Vin × 10 / (20 + 10) = Vin / 3</code>.
+</div>
+
+<!-- ================================================================== -->
+<h2>11. Design Decisions &amp; Trade-offs</h2>
+
+<h3>11.1 Why an External Microcontroller (ESP32)?</h3>
+<p>
+Real-time motor control (PWM generation, H-bridge sequencing, servo pulse timing) is unreliable under a Linux kernel with non-real-time scheduling. Offloading these tasks to the ESP32 ensures:
+</p>
+<ul>
+  <li><strong>Deterministic timing</strong> — motor PWM and servo refresh rates are unaffected by Linux process scheduling.</li>
+  <li><strong>Fault isolation</strong> — a Python crash does not leave motors running indefinitely (the ESP32 can implement timeout-based safety stops).</li>
+  <li><strong>Power management</strong> — the ESP32 can monitor battery voltage and initiate shutdown even if the Pi is frozen.</li>
+</ul>
+
+<h3>11.2 Text-Based Protocol vs Binary Protocol</h3>
+<p>
+The command protocol uses human-readable ASCII strings (e.g., <code>HEAD:90</code>) rather than a compact binary format. This is chosen for:
+</p>
+<ul>
+  <li><strong>Debugging ease</strong> — commands are directly readable from the Serial monitor.</li>
+  <li><strong>Low overhead</strong> — at 115200 baud, a 10-byte command takes ~0.87 ms to transmit. Even at 30 commands/second, serial bandwidth is negligible.</li>
+  <li><strong>Firmware simplicity</strong> — <code>cmd.startsWith()</code> is trivial compared to parsing packed binary structs.</li>
+</ul>
+
+<h3>11.3 Non-Blocking Animations</h3>
+<p>
+The HAPPY animation runs as a state machine inside <code>loop()</code> using <code>millis()</code> comparisons rather than <code>delay()</code>. This ensures the ESP32 can still respond to new commands, read battery, and handle timed motor expiry during the animation. Adding new animations follows the same pattern: a boolean flag, a start timestamp, and phase transitions driven by elapsed time.
+</p>
+
+<h3>11.4 Battery Monitor — Separation of Concerns</h3>
+<p>
+The <code>BatteryMonitor</code> Python class is intentionally independent of the <code>FaceModule</code> display system. Voltage data flows through callbacks (<code>on_update</code>) rather than direct coupling. This allows:
+</p>
+<ul>
+  <li>The battery icon on the face display to be driven from anywhere in the application.</li>
+  <li>Easy unit testing of shutdown logic without needing a display.</li>
+  <li>Swapping voltage sources (e.g., I<sup>2</sup>C fuel gauge instead of serial reading) without changing the shutdown logic.</li>
+</ul>
+
+<!-- ================================================================== -->
+<h2>12. Future Improvements</h2>
+<ul>
+  <li><strong>Arm gesture reactions</strong> — add <code>WAVE</code>, <code>WAVE_R</code>, <code>WAVE_L</code> animation commands for expressive arm movement during conversations.</li>
+  <li><strong>Speed ramp</strong> — implement acceleration/deceleration ramps for smoother motion. Current speed changes are instantaneous (<code>ledcWrite()</code> is set directly).</li>
+  <li><strong>Servo position feedback</strong> — use ADC-equipped servos or potentiometers to read actual servo positions back to the Pi.</li>
+  <li><strong>CAN bus for multi-ESP32 systems</strong> — if the robot gains additional modules (e.g., sensor array, display controller), a CAN bus would provide deterministic multi-master communication.</li>
+  <li><strong>Watchdog timer</strong> — enable the ESP32 hardware watchdog to reset the microcontroller if the main loop hangs.</li>
+  <li><strong>Timeout safety</strong> — automatically stop motors if no command is received within a configurable window (e.g., 5 seconds), preventing runaway movement if the serial link drops.</li>
+</ul>
+
+<div class="callout">
+  <strong>Document Version:</strong> 1.0 &mdash; Generated for graduation-project submission.
+</div>
+
+</div>
+</body>
+</html>

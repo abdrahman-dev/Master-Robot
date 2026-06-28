@@ -384,9 +384,10 @@ class LLMModule:
         session_id: str,
         user_message: str,
         vision_context: Optional[Dict[str, Any]] = None,
+        academic_context: Optional[str] = None,
     ) -> str:
-        if not user_message and not vision_context:
-            raise LLMModuleError("[llm.chat] user_message and vision_context cannot both be empty")
+        if not user_message and not vision_context and not academic_context:
+            raise LLMModuleError("[llm.chat] user_message, vision_context, and academic_context cannot all be empty")
 
         language = self.session_manager.get_session_language(session_id)
         if language == "ar":
@@ -424,6 +425,7 @@ class LLMModule:
 
         messages = [
             {"role": "system", "content": system_content},
+            *([{"role": "system", "content": academic_context}] if academic_context else []),
             *history,
             {"role": "user", "content": "[تذكير: ردك لازم يكون بالعربية العامية المصرية فقط]" if language == "ar" else "[Reminder: Reply in English only]"},
             {"role": "assistant", "content": "حسناً، سأرد باللغة العربية الفصحى." if language == "ar" else "Sure, I will reply in English only."},

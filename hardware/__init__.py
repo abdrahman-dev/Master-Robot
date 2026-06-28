@@ -1,2 +1,3 @@
 from hardware.motor_controller import MotorController
-__all__ = ["MotorController"]
+from hardware.battery_monitor import BatteryMonitor
+__all__ = ["MotorController", "BatteryMonitor"]

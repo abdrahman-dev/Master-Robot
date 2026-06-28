@@ -330,6 +330,36 @@ if [ "$IS_PI" = true ]; then
         fi
     fi
 
+    # Enable UART for ESP32 communication (/dev/serial0)
+    if command -v raspi-config &>/dev/null; then
+        print_info "Enabling UART interface for ESP32..."
+        if sudo raspi-config nonint do_serial 0 2>/dev/null; then
+            print_ok "UART hardware enabled (GPIO 14/15)"
+        else
+            print_warn "Could not enable UART via raspi-config (non-fatal)"
+        fi
+        print_info "Disabling serial console..."
+        if sudo raspi-config nonint do_serial_cons 0 2>/dev/null; then
+            print_ok "Serial login shell disabled"
+        else
+            print_warn "Could not disable serial console (non-fatal)"
+        fi
+    else
+        print_warn "raspi-config not found — enable UART manually in config.txt (enable_uart=1)"
+    fi
+
+    # Serial port permissions
+    if groups "$USER" 2>/dev/null | grep -q "dialout"; then
+        print_ok "User $USER already in dialout group"
+    else
+        print_info "Adding user $USER to dialout group..."
+        if sudo usermod -a -G dialout "$USER" 2>/dev/null; then
+            print_warn "User added to dialout group — log out and back in for changes to take effect"
+        else
+            print_warn "Could not add user to dialout group (non-fatal)"
+        fi
+    fi
+
     # GPU memory
     CONFIG_FILE=""
     if [ -f /boot/firmware/config.txt ]; then
@@ -461,6 +491,9 @@ import scipy
 import edge_tts
 import rapidfuzz
 import ultralytics
+import serial
+import arabic_reshaper
+import bidi
 print('OK')
 " 2>&1)
 if [ $? -eq 0 ]; then

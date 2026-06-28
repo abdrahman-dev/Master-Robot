@@ -20,6 +20,7 @@ class GeneralSettings:
     log_level: str = os.getenv("ROBOT_LOG_LEVEL", "INFO")
     student_name: str = os.getenv("ROBOT_STUDENT_NAME", "Student")
     default_session_language: str = os.getenv("ROBOT_DEFAULT_SESSION_LANGUAGE", "ar")
+    fullscreen: bool = os.getenv("ROBOT_FULLSCREEN", "false").lower() in ("1", "true", "yes")
 
 
 @dataclass(frozen=True)
@@ -155,6 +156,12 @@ class TTSSettings:
     en_voice: str = os.getenv("ROBOT_TTS_EN_VOICE", "en-US-GuyNeural")
 
 
+@dataclass(frozen=True)
+class AcademicSettings:
+    mode: bool = os.getenv("ROBOT_ACADEMIC_MODE", "false").lower() in ("1", "true", "yes")
+    api_port: int = int(os.getenv("ROBOT_ACADEMIC_API_PORT", "8001"))
+
+
 from enum import Enum
 
 
@@ -209,7 +216,7 @@ class ServoSettings:
 @dataclass(frozen=True)
 class MotorSettings:
     serial_port: str = os.getenv("ROBOT_MOTOR_PORT",
-        "COM3" if not IS_RASPBERRY_PI else "/dev/ttyS0")
+        "COM3" if not IS_RASPBERRY_PI else "/dev/serial0")
     baudrate: int = int(os.getenv("ROBOT_MOTOR_BAUDRATE", "115200"))
     serial_timeout_sec: float = 1.0
     default_speed: int = 150
@@ -243,6 +250,7 @@ class Settings:
     vad: VADSettings
     llm: LLMSettings
     tts: TTSSettings
+    academic: AcademicSettings
     servo: ServoSettings
     motor: MotorSettings
     battery: BatterySettings
@@ -260,6 +268,7 @@ def get_settings() -> Settings:
         vad=VADSettings(),
         llm=LLMSettings(),
         tts=TTSSettings(),
+        academic=AcademicSettings(),
         servo=ServoSettings(),
         motor=MotorSettings(),
         battery=BatterySettings(),

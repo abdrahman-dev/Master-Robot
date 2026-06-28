@@ -16,8 +16,9 @@ from voice.tts import TTSModule
 from voice.face import FaceModule, FaceState
 from vision.pipeline import VisionPipeline
 from llm.module import LLMModule
-from hardware import MotorController
-from hardware.battery_monitor import BatteryMonitor
+from hardware import MotorController, BatteryMonitor
+from academic.context import AcademicContext
+from academic.server import create_academic_app, run_academic_server
 
 _SETTINGS = get_settings()
 _PRESET = detect_preset()
@@ -73,7 +74,7 @@ def main() -> None:
     diag = run_startup_diagnostics()
     print_diagnostics(diag)
 
-    face = FaceModule(fullscreen=False)
+    face = FaceModule(fullscreen=_SETTINGS.general.fullscreen)
     face.start()
 
     if _SETTINGS.vision.enable_metrics_overlay:
@@ -90,7 +91,7 @@ def main() -> None:
 
     vision_pipeline = VisionPipeline()
 
-    motor_port = os.getenv("ROBOT_MOTOR_PORT", "COM3" if sys.platform == "win32" else "/dev/ttyS0")
+    motor_port = os.getenv("ROBOT_MOTOR_PORT", "COM3" if sys.platform == "win32" else "/dev/serial0")
     motor = MotorController(port=motor_port)
     if motor.is_available():
         logger.info("[main] Motor controller connected on %s", motor_port)
@@ -120,6 +121,18 @@ def main() -> None:
         except ValueError:
             pass
 
+    if _SETTINGS.academic.mode:
+        academic_context = AcademicContext()
+
+        def on_tts_text(text: str) -> None:
+            face.set_spoken_text(text)
+        tts_module.set_text_callback(on_tts_text)
+
+        app = create_academic_app(academic_context, llm, tts_module, face)
+        run_academic_server(app, port=_SETTINGS.academic.api_port)
+    else:
+        academic_context = None
+
     voice_pipeline = VoicePipeline(
         llm=llm,
         tts_module=tts_module,
@@ -127,6 +140,7 @@ def main() -> None:
         face_set_state=set_face_state,
         motor_controller=motor,
         vision_context_getter=vision_pipeline.get_shared_context,
+        academic_context=academic_context,
     )
 
     if vision_pipeline.open():
@@ -147,6 +161,8 @@ def main() -> None:
         vision_pipeline.stop()
         vision_pipeline.close()
         battery_monitor.stop()
+        motor.stop()
+        motor.center_servos()
         motor.close()
         llm.close()
         face.stop()

@@ -41,6 +41,7 @@ class TTSModule:
 
         self._on_playback_start: Optional[callable] = None
         self._on_playback_finish: Optional[callable] = None
+        self._on_tts_text: Optional[callable] = None
 
         self._pygame = None
         self._pygame_ready = False
@@ -62,6 +63,9 @@ class TTSModule:
     ) -> None:
         self._on_playback_start = on_start
         self._on_playback_finish = on_finish
+
+    def set_text_callback(self, callback: Optional[callable]) -> None:
+        self._on_tts_text = callback
 
     def is_playing(self) -> bool:
         if not self._pygame_ready:
@@ -149,6 +153,9 @@ class TTSModule:
             try:
                 if self._stop_event.is_set():
                     return
+
+                if self._on_tts_text:
+                    self._on_tts_text(text)
 
                 asyncio.run(self._generate(text, voice, path))
 

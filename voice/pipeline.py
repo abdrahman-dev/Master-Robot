@@ -129,6 +129,7 @@ class VoicePipeline:
         face_set_state: Optional[Callable] = None,
         motor_controller=None,
         vision_context_getter=None,
+        academic_context=None,
     ):
         self._mic_available = True
 
@@ -171,6 +172,7 @@ class VoicePipeline:
         self._session_id = session_id
         self._motor = motor_controller
         self._vision_context_getter = vision_context_getter
+        self._academic_context = academic_context
 
         self._latest_turn_id = 0
         self._turn_lock = threading.Lock()
@@ -307,9 +309,17 @@ class VoicePipeline:
                 if has_real_data:
                     vision_context = ctx
 
+            academic_ctx = None
+            if self._academic_context and self._academic_context.is_active():
+                academic_ctx = self._academic_context.get_formatted(detected_lang)
+
             t0 = time.monotonic()
             try:
-                response = self._llm.chat(self._session_id, text, vision_context=vision_context)
+                response = self._llm.chat(
+                    self._session_id, text,
+                    vision_context=vision_context,
+                    academic_context=academic_ctx,
+                )
             except LLMModuleError:
                 logger.warning("[LLM] OpenRouter unavailable, using fallback")
                 lang = detected_lang if detected_lang in ("ar", "en") else "en"
