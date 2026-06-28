@@ -34,6 +34,9 @@ PIP_TO_MODULE = {
     "speechrecognition": "speech_recognition",
     "edge-tts": "edge_tts",
     "opencv-python": "cv2",
+    "pyserial": "serial",
+    "arabic-reshaper": "arabic_reshaper",
+    "python-bidi": "bidi",
 }
 
 # ── Helpers ───────────────────────────────────────────────────────
@@ -123,6 +126,10 @@ def main():
         ("ultralytics", "ultralytics"),
         ("torchvision", "torchvision"),
         ("pygame", "pygame"),
+        ("pyserial", "serial"),
+        ("psutil", "psutil"),
+        ("arabic-reshaper", "arabic_reshaper"),
+        ("python-bidi", "bidi"),
     ]
 
     for pip_name, import_name in packages:
@@ -194,6 +201,8 @@ def main():
         "vision.modules.emotion", "vision.modules.objects",
         "vision.modules.scene", "vision.modules.obstacle",
         "llm.module", "config.settings", "config.diagnostics",
+        "hardware.motor_controller",
+        "hardware.battery_monitor",
     ]
     for mod_name in modules:
         try:
@@ -300,6 +309,46 @@ def main():
     except Exception as e:
         check("  Camera live test", WN, str(e)[:60])
 
+    # ── Hardware ────────────────────────────────────────────
+    section("Hardware")
+
+    try:
+        from hardware import MotorController, BatteryMonitor
+
+        mc = MotorController()
+        if mc.is_available():
+            check("MotorController available", OK, f"port={mc._port}, baud={mc._baudrate}")
+
+            ok = mc.center_servos()
+            check("Center servos", OK if ok else WN, "sent" if ok else "send failed")
+
+            ok = mc.stop()
+            check("Stop motors", OK if ok else WN, "sent" if ok else "send failed")
+
+            t0 = time.monotonic()
+            battery_found = False
+            while time.monotonic() - t0 < 2.0:
+                line = mc.read_line()
+                if line and line.startswith("BAT:"):
+                    try:
+                        v = float(line[4:])
+                        check("Battery voltage", OK, f"{v:.2f}V")
+                        battery_found = True
+                        break
+                    except ValueError:
+                        pass
+            if not battery_found:
+                check("Battery voltage", GR, "no BAT: packet (expected if ESP32 not connected)")
+        else:
+            check("MotorController available", WN, "serial port not available — skipping hardware tests")
+
+        bm = BatteryMonitor(motor_controller=mc)
+        bm.start()
+        bm.stop()
+        check("BatteryMonitor lifecycle", OK, "construct → start → stop")
+    except Exception as e:
+        check("Hardware section", ER, str(e)[:70])
+
     # ── Integration ───────────────────────────────────────────────
     section("Integration")
 
@@ -349,6 +398,15 @@ def main():
         check("VoicePipeline instantiate", OK, "not opened")
     except Exception as e:
         check("VoicePipeline instantiate", ER, str(e)[:60])
+
+    try:
+        from hardware import MotorController, BatteryMonitor
+        i_mc = MotorController()
+        i_bm = BatteryMonitor(motor_controller=i_mc)
+        i_mc.close()
+        check("Hardware integration", OK, "MotorController + BatteryMonitor lifecycle")
+    except Exception as e:
+        check("Hardware integration", ER, str(e)[:60])
 
     # ── Summary ───────────────────────────────────────────────────
     print()
