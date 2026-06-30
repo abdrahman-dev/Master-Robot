@@ -12,8 +12,8 @@ from typing import Optional, Callable
 
 logger = logging.getLogger(__name__)
 
-LOW_VOLTAGE_THRESHOLD = 7.2   # volts — warn and start countdown
-CRITICAL_VOLTAGE_THRESHOLD = 6.8  # volts — immediate shutdown
+LOW_VOLTAGE_THRESHOLD = 7.1   # volts — warn and start countdown
+CRITICAL_VOLTAGE_THRESHOLD = 6.5  # volts — immediate shutdown
 WARN_COUNTDOWN_SECONDS = 30
 CHECK_INTERVAL = 0.5  # seconds between read attempts
 
