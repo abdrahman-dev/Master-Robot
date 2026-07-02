@@ -386,6 +386,52 @@ def full_hardware_test(mc: MotorController) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Serial connection report
+# ---------------------------------------------------------------------------
+
+def print_serial_report(mc: MotorController) -> None:
+    """Display a summary of the serial connection state."""
+    print("  ═════ Motor Controller ═════")
+    print(f"  Configured Port : {mc.requested_port}")
+    print(f"  Connected Port  : {mc.port if mc.is_available() else '—'}")
+    print(f"  Baudrate        : {mc._baudrate}")
+    print(f"  Auto Detection  : {'YES' if mc.auto_detected else 'NO'}")
+    print(f"  ESP32 Status    : {'Connected' if mc.is_available() else 'Disconnected'}")
+    print()
+
+
+# ---------------------------------------------------------------------------
+# Startup self-test
+# ---------------------------------------------------------------------------
+
+def run_self_test(mc: MotorController) -> None:
+    """Run a quick self-test and print results for each subsystem."""
+    print("  ═════ Startup Self-Test ═════")
+
+    ok = mc.is_available()
+    print(f"  {'[PASS]' if ok else '[FAIL]'} ESP32 Connection")
+
+    if ok:
+        for _ in range(20):
+            line = mc.read_line()
+            if line and line.startswith("BAT:"):
+                print(f"  [PASS] Battery Stream")
+                break
+            time.sleep(0.05)
+        else:
+            print("  [WARN] Battery Stream (no packet yet)")
+    else:
+        print("  [SKIP] Battery Stream")
+
+    for item in [
+        "Camera", "Microphone", "Speaker",
+        "Face Detection", "Gesture Detection", "Shutdown API",
+    ]:
+        print(f"  [SKIP] {item} (not in diagnostics mode)")
+    print()
+
+
+# ---------------------------------------------------------------------------
 # Menu
 # ---------------------------------------------------------------------------
 
@@ -424,6 +470,9 @@ def main() -> None:
     mc = MotorController()
     if not mc.is_available():
         print("  ⚠ Motor controller not available — commands will be simulated.\n")
+
+    print_serial_report(mc)
+    run_self_test(mc)
 
     # ── main loop ──
     try:

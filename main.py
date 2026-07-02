@@ -112,6 +112,7 @@ def main() -> None:
         on_low_battery=on_low_battery,
         on_shutdown=lambda: logger.critical("[main] Battery shutdown triggered"),
         on_update=on_battery_update,
+        settings=_SETTINGS.battery,
     )
     battery_monitor.start()
 

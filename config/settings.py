@@ -220,14 +220,16 @@ class MotorSettings:
     baudrate: int = int(os.getenv("ROBOT_MOTOR_BAUDRATE", "115200"))
     serial_timeout_sec: float = 1.0
     default_speed: int = 150
+    auto_detect: bool = os.getenv("ROBOT_MOTOR_AUTO_DETECT", "true").lower() in ("1", "true", "yes")
+    verify_timeout_sec: float = float(os.getenv("ROBOT_MOTOR_VERIFY_TIMEOUT_SEC", "2.0"))
 
 
 @dataclass(frozen=True)
 class BatterySettings:
-    low_voltage_threshold: float = 7.2
-    critical_voltage_threshold: float = 6.8
-    shutdown_countdown_sec: int = 30
-    poll_interval_sec: float = 0.5
+    low_voltage_threshold: float = float(os.getenv("ROBOT_BATTERY_LOW_VOLTAGE", "7.1"))
+    critical_voltage_threshold: float = float(os.getenv("ROBOT_BATTERY_CRITICAL_VOLTAGE", "6.5"))
+    shutdown_countdown_sec: int = int(os.getenv("ROBOT_BATTERY_WARN_COUNTDOWN_SEC", "30"))
+    poll_interval_sec: float = float(os.getenv("ROBOT_BATTERY_CHECK_INTERVAL_SEC", "0.5"))
 
 
 @dataclass(frozen=True)

@@ -12,11 +12,6 @@ from typing import Optional, Callable
 
 logger = logging.getLogger(__name__)
 
-LOW_VOLTAGE_THRESHOLD = 7.1   # volts — warn and start countdown
-CRITICAL_VOLTAGE_THRESHOLD = 6.5  # volts — immediate shutdown
-WARN_COUNTDOWN_SECONDS = 30
-CHECK_INTERVAL = 0.5  # seconds between read attempts
-
 
 class BatteryMonitor:
     def __init__(
@@ -25,6 +20,7 @@ class BatteryMonitor:
         on_low_battery: Optional[Callable[[float], None]] = None,
         on_shutdown: Optional[Callable[[], None]] = None,
         on_update: Optional[Callable[[float], None]] = None,
+        settings=None,
     ):
         self._motor = motor_controller
         self._on_low_battery = on_low_battery
@@ -35,6 +31,17 @@ class BatteryMonitor:
         self._voltage: float = 99.0  # unknown initially
         self._warning_started: Optional[float] = None
         self._lock = threading.Lock()
+
+        if settings is not None:
+            self._low_voltage = settings.low_voltage_threshold
+            self._critical_voltage = settings.critical_voltage_threshold
+            self._countdown = settings.shutdown_countdown_sec
+            self._check_interval = settings.poll_interval_sec
+        else:
+            self._low_voltage = float(os.getenv("ROBOT_BATTERY_LOW_VOLTAGE", "7.1"))
+            self._critical_voltage = float(os.getenv("ROBOT_BATTERY_CRITICAL_VOLTAGE", "6.5"))
+            self._countdown = int(os.getenv("ROBOT_BATTERY_WARN_COUNTDOWN_SEC", "30"))
+            self._check_interval = float(os.getenv("ROBOT_BATTERY_CHECK_INTERVAL_SEC", "0.5"))
 
     def get_voltage(self) -> float:
         with self._lock:
@@ -66,25 +73,25 @@ class BatteryMonitor:
                     self._check_voltage(voltage)
                 except ValueError:
                     pass
-            time.sleep(CHECK_INTERVAL)
+            time.sleep(self._check_interval)
 
     def _check_voltage(self, voltage: float) -> None:
-        if voltage <= CRITICAL_VOLTAGE_THRESHOLD:
+        if voltage <= self._critical_voltage:
             logger.critical("[battery] CRITICAL voltage %.2fV — shutting down NOW", voltage)
             if self._on_shutdown:
                 self._on_shutdown()
             self._do_shutdown()
             return
 
-        if voltage <= LOW_VOLTAGE_THRESHOLD:
+        if voltage <= self._low_voltage:
             if self._warning_started is None:
                 self._warning_started = time.monotonic()
-                logger.warning("[battery] Low voltage %.2fV — shutdown in %ds", voltage, WARN_COUNTDOWN_SECONDS)
+                logger.warning("[battery] Low voltage %.2fV — shutdown in %ds", voltage, self._countdown)
                 if self._on_low_battery:
                     self._on_low_battery(voltage)
             else:
                 elapsed = time.monotonic() - self._warning_started
-                remaining = WARN_COUNTDOWN_SECONDS - elapsed
+                remaining = self._countdown - elapsed
                 if remaining <= 0:
                     logger.critical("[battery] Countdown expired — shutting down")
                     if self._on_shutdown:
