@@ -8,15 +8,26 @@ SAMPLE_RATE = 16000
 DURATION = 5
 FILENAME = "/tmp/mic_test.wav"
 
+import sys
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+from voice import audio_device as ad
+
+ALSA_CARD = ad.get_alsa_card_number()
+if ALSA_CARD is None:
+    ALSA_CARD = 0
+    print("⚠️ No USB microphone detected — using card 0")
+AUDIO_DEVICE = f"plughw:{ALSA_CARD},0"
+print(f"🎤 Using audio device: {AUDIO_DEVICE}")
+
 
 def record_audio():
     print("\n🎤 Recording 5 seconds... speak now")
 
-    cmd = f"arecord -D plughw:2,0 -f S16_LE -r {SAMPLE_RATE} -c 1 -d {DURATION} {FILENAME}"
+    cmd = f"arecord -D {AUDIO_DEVICE} -f S16_LE -r {SAMPLE_RATE} -c 1 -d {DURATION} {FILENAME}"
     result = os.system(cmd)
 
     if result != 0:
-        print("❌ arecord failed — check device index")
+        print(f"❌ arecord failed — check device ({AUDIO_DEVICE})")
         return False
 
     return True
@@ -54,7 +65,7 @@ def live_meter():
     clock = pygame.time.Clock()
 
     while True:
-        os.system(f"arecord -D plughw:2,0 -f S16_LE -r {SAMPLE_RATE} -c 1 -d 0.1 {FILENAME} >/dev/null 2>&1")
+        os.system(f"arecord -D {AUDIO_DEVICE} -f S16_LE -r {SAMPLE_RATE} -c 1 -d 0.1 {FILENAME} >/dev/null 2>&1")
 
         wf = wave.open(FILENAME, "rb")
         frames = wf.readframes(wf.getnframes())

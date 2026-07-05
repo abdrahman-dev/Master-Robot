@@ -47,11 +47,18 @@ def run_startup_diagnostics() -> Dict[str, str]:
     results = {}
 
     try:
-        import sounddevice as sd
-        devices = sd.query_devices()
-        has_input = any(d["max_input_channels"] > 0 for d in devices)
-        results["microphone"] = "ok" if has_input else "no input device"
-        logger.debug("[startup] Microphone check: %s", results["microphone"])
+        from voice import audio_device as ad
+        usb_card = ad.get_alsa_card_number()
+        if usb_card is not None:
+            dev_index = ad.get_sounddevice_index(usb_card)
+            if dev_index is not None:
+                import sounddevice as sd
+                name = sd.query_devices(dev_index).get("name", "unknown")
+                results["microphone"] = f"ok (card {usb_card}: {name})"
+            else:
+                results["microphone"] = f"ok (card {usb_card})"
+        else:
+            results["microphone"] = "no usb microphone detected"
     except Exception as e:
         results["microphone"] = f"error: {e}"
         logger.debug("[startup] Microphone check failed: %s", e)

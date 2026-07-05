@@ -370,13 +370,20 @@ class VoicePipeline:
             self._mic_available = False
             return
 
+        from voice import audio_device as ad
+
+        device_index = ad.get_sounddevice_index()
+        if device_index is None:
+            logger.warning("[voice] No audio device found, disabling microphone")
+            self._mic_available = False
+            return
+
         device_sample_rate = self._sample_rate
         try:
-            device_info = sd.query_devices(sd.default.device[0], "input")
-            device_sample_rate = int(device_info["default_samplerate"])
+            device_sample_rate = ad.get_device_sample_rate(device_index) or self._sample_rate
             logger.info(
-                "[voice] Device samplerate: %d Hz (target: %d Hz)",
-                device_sample_rate, self._sample_rate,
+                "[voice] Device %d samplerate: %d Hz (target: %d Hz)",
+                device_index, device_sample_rate, self._sample_rate,
             )
         except Exception as exc:
             logger.warning("[voice] Could not query device samplerate: %s, using %d Hz", exc, self._sample_rate)
@@ -467,6 +474,7 @@ class VoicePipeline:
 
         try:
             with sd.InputStream(
+                device=device_index,
                 samplerate=device_sample_rate if needs_resample else self._sample_rate,
                 channels=1,
                 dtype="float32",
