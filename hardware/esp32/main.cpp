@@ -5,14 +5,14 @@
 // L298N pin assignments (ESP32 DevKit 30-pin)
 // ============================================================
 // Motor A (Right)
-const uint8_t ENA = 25; // PWM speed control - Motor A
-const uint8_t IN1 = 26; // Direction
-const uint8_t IN2 = 27; // Direction
+const uint8_t ENA = 25;
+const uint8_t IN1 = 26;
+const uint8_t IN2 = 27;
 
 // Motor B (Left)
-const uint8_t ENB = 14; // PWM speed control - Motor B
-const uint8_t IN3 = 12; // Direction
-const uint8_t IN4 = 13; // Direction
+const uint8_t ENB = 14;
+const uint8_t IN3 = 12;
+const uint8_t IN4 = 13;
 
 // Servo pin assignments
 const uint8_t SERVO_HEAD_PIN = 18;
@@ -25,13 +25,15 @@ const float VREF = 3.3;
 const float ADC_MAX = 4095.0;
 const float DIV_RATIO = 5.0;
 
-// PWM configuration (ESP32 Arduino Core v3.x API)
+// PWM configuration
 const int PWM_FREQ = 1000;
-const int PWM_RES = 8; // 8-bit = 0..255
+const int PWM_RES = 8;
 
 // Motor states
 int _speed = 180;
 unsigned long _move_until = 0;
+unsigned long _move_start = 0;
+bool _motor_moving = false;
 
 // Servo objects
 Servo servoHead;
@@ -50,6 +52,9 @@ const unsigned long BATTERY_INTERVAL = 2000;
 bool happyActive = false;
 unsigned long happyStart = 0;
 int happyPhase = 0;
+
+// Non-blocking serial buffer
+String _serial_buffer = "";
 
 // ============================================================
 void respond(const String &msg)
@@ -97,9 +102,10 @@ void motors_stop()
 {
   motor_a_stop();
   motor_b_stop();
-  ledcWrite(ENA, 0); // ✅ New API: pass pin directly
+  ledcWrite(ENA, 0);
   ledcWrite(ENB, 0);
   _move_until = 0;
+  _motor_moving = false;
 }
 
 void motors_forward()
@@ -169,6 +175,8 @@ void handle_command(const String &cmd)
     {
       motors_forward();
       _move_until = millis() + ms;
+      _move_start = millis();
+      _motor_moving = true;
       respond("OK:F" + String(ms));
     }
   }
@@ -179,6 +187,8 @@ void handle_command(const String &cmd)
     {
       motors_backward();
       _move_until = millis() + ms;
+      _move_start = millis();
+      _motor_moving = true;
       respond("OK:B" + String(ms));
     }
   }
@@ -189,6 +199,8 @@ void handle_command(const String &cmd)
     {
       motors_turn_left();
       _move_until = millis() + ms;
+      _move_start = millis();
+      _motor_moving = true;
       respond("OK:L" + String(ms));
     }
   }
@@ -199,6 +211,8 @@ void handle_command(const String &cmd)
     {
       motors_turn_right();
       _move_until = millis() + ms;
+      _move_start = millis();
+      _motor_moving = true;
       respond("OK:R" + String(ms));
     }
   }
@@ -258,15 +272,12 @@ void setup()
   Serial.begin(115200);
   Serial2.begin(115200, SERIAL_8N1, 16, 17);
 
-  // Direction pins
   pinMode(IN1, OUTPUT);
   pinMode(IN2, OUTPUT);
   pinMode(IN3, OUTPUT);
   pinMode(IN4, OUTPUT);
   pinMode(BATTERY_PIN, INPUT);
 
-  // ✅ ESP32 Core v3.x: ledcAttach(pin, freq, resolution)
-  // No STBY pin needed — L298N is always enabled
   ledcAttach(ENA, PWM_FREQ, PWM_RES);
   ledcAttach(ENB, PWM_FREQ, PWM_RES);
 
@@ -328,11 +339,21 @@ void loop()
     }
   }
 
-  if (Serial2.available())
+  while (Serial2.available())
   {
-    String line = Serial2.readStringUntil('\n');
-    line.trim();
-    if (line.length() > 0)
-      handle_command(line);
+    char c = Serial2.read();
+    if (c == '\n')
+    {
+      _serial_buffer.trim();
+      if (_serial_buffer.length() > 0)
+      {
+        handle_command(_serial_buffer);
+      }
+      _serial_buffer = "";
+    }
+    else
+    {
+      _serial_buffer += c;
+    }
   }
 }

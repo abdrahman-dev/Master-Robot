@@ -203,9 +203,7 @@ class VoicePipeline:
             return self._latest_turn_id
 
     def _maybe_stop_tts_on_interrupt(self) -> None:
-        if self._tts.is_playing():
-            logger.info("[TTS] Interrupted by new speech")
-            self._tts.stop()
+        pass
 
     def _enqueue_segment(self, segment: Segment) -> None:
         self._total_segments += 1
@@ -260,6 +258,14 @@ class VoicePipeline:
                 if self._face_set_state:
                     self._face_set_state("IDLE")
                 return
+
+            if self._tts.is_playing():
+                if _is_wake_word(text):
+                    logger.info("[voice] Wake word during TTS, interrupting")
+                    self._tts.stop_playback()
+                else:
+                    logger.info("[voice] Non-wake-word during TTS, ignoring")
+                    return
 
             if _is_wake_word(text):
                 logger.info("[voice] Wake word detected")
@@ -334,11 +340,8 @@ class VoicePipeline:
 
             if detected_lang:
                 logger.info("[TTS] Starting playback (lang=%s)", detected_lang)
-                t0 = time.monotonic()
                 self._tts.stop()
-                self._tts.speak_and_wait(response, language=detected_lang)
-                tts_time = time.monotonic() - t0
-                logger.info("[TTS] playback_time=%.2fs", tts_time)
+                self._tts.speak(response, language=detected_lang)
             else:
                 logger.warning("[TTS] No detected language, skipping playback")
                 if self._face_set_state:
@@ -427,8 +430,7 @@ class VoicePipeline:
                 if segment_chunks is None:
                     if speech_now:
                         current_turn_id = self._next_turn_id()
-                        self._maybe_stop_tts_on_interrupt()
-                        if self._face_set_state:
+                        if self._face_set_state and not self._tts.is_playing():
                             self._face_set_state("LISTENING")
                         logger.info("[VAD] Speech detected (turn=%s)", current_turn_id)
                         segment_chunks = deque(pre_buffer)

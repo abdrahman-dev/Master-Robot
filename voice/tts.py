@@ -187,11 +187,20 @@ class TTSModule:
 
         threading.Thread(target=worker, daemon=True).start()
 
+    def stop_playback(self) -> None:
+        logger.info("[TTS] Playback stopped by interrupt")
+        with self._lock:
+            self._stop_event.set()
+            self._request_id += 1
+            self._is_playing = False
+        if self._pygame_ready:
+            try:
+                self._pygame.mixer.music.stop()
+                self._pygame.mixer.music.unload()
+            except Exception:
+                pass
+
     def speak_and_wait(self, text: str, language: Optional[str] = None) -> None:
         self.speak(text, language=language)
-        for _ in range(100):
-            if self.is_playing():
-                break
-            time.sleep(0.05)
-        while self.is_playing():
+        while self._pygame.mixer.music.get_busy():
             time.sleep(0.05)

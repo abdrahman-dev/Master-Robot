@@ -1,4 +1,5 @@
 import logging
+import time
 from typing import Optional, Tuple
 
 import speech_recognition as sr
@@ -60,10 +61,17 @@ def transcribe(
             continue
 
         except sr.RequestError as e:
-            raise ASRModuleError(
-                "[asr.transcribe] Google Speech API request failed. "
-                f"Reason: {e}. Check internet connection and API quota."
-            ) from e
+            logger.warning(f"[ASR] Google request failed: {e}. Retrying once in 2s...")
+            time.sleep(2)
+            try:
+                text = recognizer.recognize_google(audio_data, language=lang_code)
+                logger.info(f"[ASR] Success (retry): recognized {lang}")
+                return text, lang
+            except sr.RequestError:
+                logger.error(f"[ASR] Retry also failed")
+                continue
+            except sr.UnknownValueError:
+                continue
 
         except Exception as e:
             raise ASRModuleError(
