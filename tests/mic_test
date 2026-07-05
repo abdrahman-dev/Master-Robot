@@ -1,0 +1,81 @@
+import sounddevice as sd
+import numpy as np
+import time
+
+SAMPLE_RATE = 16000
+DURATION = 5
+
+
+def list_devices():
+    print("\n=== AUDIO DEVICES ===")
+    print(sd.query_devices())
+    print("\nDefault device:", sd.default.device)
+
+
+def record_test():
+    print("\n🎤 Recording for 5 seconds... speak now\n")
+
+    audio = sd.rec(
+        int(DURATION * SAMPLE_RATE),
+        samplerate=SAMPLE_RATE,
+        channels=1,
+        dtype="float32"
+    )
+
+    sd.wait()
+
+    audio = audio.flatten()
+
+    rms = np.sqrt(np.mean(audio ** 2))
+    peak = np.max(np.abs(audio))
+
+    print("\n=== RESULTS ===")
+    print(f"RMS Level  : {rms:.5f}")
+    print(f"Peak Level : {peak:.5f}")
+
+    if peak < 0.01:
+        print("\n❌ MIC LOOKS DEAD (no signal)")
+    elif peak < 0.05:
+        print("\n⚠️ VERY LOW INPUT (increase gain / check alsamixer)")
+    elif peak < 0.2:
+        print("\n✅ OK INPUT (good for VAD)")
+    else:
+        print("\n⚡ VERY LOUD (check distortion / gain too high)")
+
+
+def live_meter():
+    print("\n🎧 Live audio meter (Ctrl+C to stop)\n")
+
+    def callback(indata, frames, time_info, status):
+        volume = np.sqrt(np.mean(indata ** 2))
+        bar = "█" * int(volume * 200)
+        print(f"\r{volume:.5f} {bar}", end="")
+
+    with sd.InputStream(
+        samplerate=SAMPLE_RATE,
+        channels=1,
+        callback=callback
+    ):
+        while True:
+            time.sleep(0.1)
+
+
+if __name__ == "__main__":
+    print("\n=== MIC TEST TOOL ===")
+    print("1 - List devices")
+    print("2 - Record test (5s)")
+    print("3 - Live meter")
+
+    choice = input("\nSelect: ").strip()
+
+    if choice == "1":
+        list_devices()
+
+    elif choice == "2":
+        record_test()
+
+    elif choice == "3":
+        live_meter()
+
+    else:
+        print("Invalid choice")
