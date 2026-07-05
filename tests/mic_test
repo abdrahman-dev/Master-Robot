@@ -12,7 +12,7 @@ FILENAME = "/tmp/mic_test.wav"
 def record_audio():
     print("\n🎤 Recording 5 seconds... speak now")
 
-    cmd = f"arecord -D plughw:1,0 -f S16_LE -r {SAMPLE_RATE} -c 1 -d {DURATION} {FILENAME}"
+    cmd = f"arecord -D plughw:2,0 -f S16_LE -r {SAMPLE_RATE} -c 1 -d {DURATION} {FILENAME}"
     result = os.system(cmd)
 
     if result != 0:
@@ -44,7 +44,7 @@ def analyze_audio():
         print("\n✅ GOOD INPUT (VAD friendly)")
     else:
         print("\n⚡ TOO LOUD (clipping possible)")
-
+ 
 
 def live_meter():
     print("\n🎧 Live meter (pygame) — press ESC to exit")
@@ -54,7 +54,7 @@ def live_meter():
     clock = pygame.time.Clock()
 
     while True:
-        os.system(f"arecord -D plughw:1,0 -f S16_LE -r {SAMPLE_RATE} -c 1 -d 0.1 {FILENAME} >/dev/null 2>&1")
+        os.system(f"arecord -D plughw:2,0 -f S16_LE -r {SAMPLE_RATE} -c 1 -d 0.1 {FILENAME} >/dev/null 2>&1")
 
         wf = wave.open(FILENAME, "rb")
         frames = wf.readframes(wf.getnframes())
