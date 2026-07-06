@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import logging
-import math
 import queue
 import random
 import threading
@@ -19,18 +18,14 @@ from voice.tts import TTSModule
 from llm.module import LLMModule, LLMModuleError
 
 
-def _compute_resample_ratio(orig_rate: int, target_rate: int) -> tuple[int, int]:
-    gcd = math.gcd(orig_rate, target_rate)
-    return target_rate // gcd, orig_rate // gcd
-
-
 def _resample_chunk(chunk: np.ndarray, orig_rate: int, target_rate: int) -> np.ndarray:
     if orig_rate == target_rate:
         return chunk
-    from scipy.signal import resample_poly
-    up, down = _compute_resample_ratio(orig_rate, target_rate)
-    resampled = resample_poly(chunk, up, down)
-    return resampled.astype(np.float32)
+    duration = chunk.shape[0] / float(orig_rate)
+    target_len = max(1, int(round(duration * target_rate)))
+    src_x = np.linspace(0.0, duration, num=chunk.shape[0], endpoint=False, dtype=np.float64)
+    dst_x = np.linspace(0.0, duration, num=target_len, endpoint=False, dtype=np.float64)
+    return np.interp(dst_x, src_x, chunk).astype(np.float32, copy=False)
 
 FILLER_PHRASES = {
     "ar": [
@@ -184,6 +179,9 @@ class VoicePipeline:
 
         self._dropped_segments = 0
         self._total_segments = 0
+
+        # Running RMS tracker for automatic gain normalization (critical for Pi's quiet USB mics)
+        self._rms_level = 1e-4
 
         self._watchdog_ping: Optional[Callable] = None
         self._ping_counter = 0
@@ -399,7 +397,9 @@ class VoicePipeline:
         self._resample_buffer = np.array([], dtype=np.float32)
 
         if needs_resample:
-            up, down = _compute_resample_ratio(device_sample_rate, self._sample_rate)
+            import math
+            gcd = math.gcd(device_sample_rate, self._sample_rate)
+            up, down = self._sample_rate // gcd, device_sample_rate // gcd
             logger.info(
                 "[voice] Resampling: %d Hz -> %d Hz (ratio=%d/%d)",
                 device_sample_rate, self._sample_rate, up, down,
@@ -434,6 +434,15 @@ class VoicePipeline:
                 while len(self._resample_buffer) >= self._chunk_size:
                     chunk_16k = self._resample_buffer[:self._chunk_size]
                     self._resample_buffer = self._resample_buffer[self._chunk_size:]
+
+                    # Gentle AGC: only boost quiet audio, never reduce normal/loud audio
+                    rms = np.sqrt(np.mean(chunk_16k ** 2))
+                    self._rms_level = 0.92 * self._rms_level + 0.08 * max(rms, 1e-8)
+                    if self._rms_level < 0.08:
+                        gain = 0.10 / max(self._rms_level, 1e-8)
+                        gain = min(gain, 10.0)
+                        chunk_16k = chunk_16k * gain
+                        chunk_16k = np.clip(chunk_16k, -1.0, 1.0)
 
                     speech_now = vad.is_speech(chunk_16k)
                     chunk_bytes = float32_chunk_to_int16_bytes(chunk_16k)

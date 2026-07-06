@@ -85,6 +85,7 @@ class ASRSettings:
     language_mode: str = os.getenv("ROBOT_ASR_LANGUAGE_MODE", "auto")
     default_record_duration_seconds: float = float(os.getenv("ROBOT_ASR_DEFAULT_DURATION_SEC", "5.0"))
     supported_languages: Dict[str, str] = field(default_factory=lambda: {"en": "en-US", "ar": "ar-EG"})
+    whisper_model_size: str = os.getenv("ROBOT_ASR_WHISPER_MODEL", "small")
 
 
 def _clean_env_value(value: str) -> str:
@@ -282,6 +283,11 @@ def get_settings() -> Settings:
 
 def configure_platform():
     if IS_RASPBERRY_PI:
+        import os
+        os.environ.setdefault("OMP_NUM_THREADS", "1")
+        os.environ.setdefault("MKL_NUM_THREADS", "1")
+        os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
+        os.environ.setdefault("SDL_AUDIODRIVER", "alsa")
         import cv2
         import torch
         cv2.setNumThreads(1)

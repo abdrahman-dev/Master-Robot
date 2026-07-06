@@ -77,6 +77,41 @@ def get_sounddevice_index(alsa_card: Optional[int] = None) -> Optional[int]:
                 logger.info("Audio device %d: %s", i, name)
                 return i
 
+    # Fallback for Windows / non-ALSA platforms
+    if AUDIO_DEVICE_OVERRIDE:
+        devices = sd.query_devices()
+        try:
+            idx = int(AUDIO_DEVICE_OVERRIDE)
+            if 0 <= idx < len(devices):
+                logger.info("Using device %d via ROBOT_AUDIO_DEVICE override", idx)
+                return idx
+        except ValueError:
+            pass
+        for i, dev in enumerate(devices):
+            if AUDIO_DEVICE_OVERRIDE.lower() in dev["name"].lower():
+                logger.info("Matched device %d '%s' via ROBOT_AUDIO_DEVICE='%s'",
+                            i, dev["name"], AUDIO_DEVICE_OVERRIDE)
+                return i
+
+    default = sd.default.device
+    if default is None:
+        pass
+    elif isinstance(default, (int, float)):
+        pass
+    else:
+        try:
+            default = default[0]
+        except (TypeError, IndexError, KeyError):
+            default = None
+    if default is not None and default >= 0:
+        logger.info("Using system default input device index %d", default)
+        return int(default)
+
+    for i, dev in enumerate(sd.query_devices()):
+        if dev["max_input_channels"] > 0:
+            logger.info("Fallback to device %d '%s' (has input channels)", i, dev["name"])
+            return i
+
     logger.warning("No matching audio device found — caller should handle gracefully")
     return None
 
