@@ -21,6 +21,8 @@ class GeneralSettings:
     student_name: str = os.getenv("ROBOT_STUDENT_NAME", "Student")
     default_session_language: str = os.getenv("ROBOT_DEFAULT_SESSION_LANGUAGE", "ar")
     fullscreen: bool = os.getenv("ROBOT_FULLSCREEN", "false").lower() in ("1", "true", "yes")
+    dev_text_input: bool = os.getenv("ROBOT_DEV_TEXT_INPUT", "false").lower() in ("1", "true", "yes")
+    mic_enabled: bool = os.getenv("ROBOT_MIC_ENABLED", "true").lower() in ("1", "true", "yes")
 
 
 @dataclass(frozen=True)

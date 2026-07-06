@@ -150,6 +150,29 @@ def main() -> None:
     voice_pipeline.start()
     logger.info("[startup] All modules initialized, entering pygame main loop")
 
+    if _SETTINGS.general.dev_text_input:
+        import threading
+        logger.info("[dev] Text input mode enabled — type text and press Enter")
+
+        def dev_input_loop():
+            while True:
+                try:
+                    text = input("[dev] > ").strip()
+                except (EOFError, KeyboardInterrupt):
+                    break
+                if not text:
+                    continue
+                if text.lower() in ("quit", "exit"):
+                    break
+                voice_pipeline.process_text(text, "ar")
+
+        dev_thread = threading.Thread(target=dev_input_loop, daemon=True)
+        dev_thread.start()
+        logger.info("[dev] Text input ready — session language: ar")
+        print("\n[DEV MODE] Text input active. Type Arabic or English, press Enter.")
+        print("[DEV MODE] Robot will always respond in Arabic.")
+        print("[DEV MODE] Type 'quit' to exit.\n")
+
     try:
         face.run_main_thread()
     except KeyboardInterrupt:

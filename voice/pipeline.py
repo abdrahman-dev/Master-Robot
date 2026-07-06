@@ -244,7 +244,7 @@ class VoicePipeline:
             text, detected_lang = asr.transcribe(
                 audio_bytes,
                 samplerate=self._sample_rate,
-                language=_SETTINGS.asr.language_mode,
+                language="ar",  # Fixed to Arabic — change to _SETTINGS.asr.language_mode for auto-detect
             )
             asr_time = time.monotonic() - t0
             logger.info("[ASR] result=%r lang=%r time=%.2fs", text, detected_lang, asr_time)
@@ -359,6 +359,9 @@ class VoicePipeline:
                 self._face_set_state("IDLE")
 
     def run_forever(self) -> None:
+        if not _SETTINGS.general.mic_enabled:
+            logger.info("[voice] Microphone disabled via ROBOT_MIC_ENABLED=false")
+            return
         if not self._mic_available:
             logger.warning("[voice] Microphone unavailable, audio pipeline disabled")
             return
@@ -512,3 +515,48 @@ class VoicePipeline:
             self._worker_thread = None
         logger.info("[voice] Stopped (total=%d, dropped=%d)",
                      self._total_segments, self._dropped_segments)
+
+    def process_text(self, text: str, language: str = "ar") -> None:
+        logger.info("[dev] Text input: %s", text)
+
+        if self._face_set_state:
+            self._face_set_state("THINKING")
+
+        vision_context = None
+        if self._vision_context_getter:
+            ctx = self._vision_context_getter()
+            faces = ctx.get("faces", [])
+            objects = ctx.get("objects", {}).get("objects", [])
+            obstacle = ctx.get("obstacle", {}).get("obstacle_detected", False)
+            gesture = ctx.get("gesture", {}).get("gesture", "none")
+            emotion = ctx.get("emotion", {}).get("emotion", "neutral")
+            has_real_data = (
+                len(faces) > 0 or
+                len(objects) > 0 or
+                obstacle or
+                gesture not in ("none", "", "unknown") or
+                emotion not in ("neutral", "", "none")
+            )
+            if has_real_data:
+                vision_context = ctx
+
+        academic_ctx = None
+        if self._academic_context and self._academic_context.is_active():
+            academic_ctx = self._academic_context.get_formatted(language)
+
+        try:
+            response = self._llm.chat(
+                self._session_id, text,
+                vision_context=vision_context,
+                academic_context=academic_ctx,
+            )
+        except LLMModuleError:
+            logger.warning("[LLM] OpenRouter unavailable, using fallback")
+            lang = language if language in ("ar", "en") else "en"
+            response = random.choice(FALLBACK_MESSAGES[lang])
+
+        self._tts.stop()
+        self._tts.speak_and_wait(response, language=language)
+
+        if self._face_set_state:
+            self._face_set_state("IDLE")
