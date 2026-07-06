@@ -412,64 +412,67 @@ class VoicePipeline:
         current_turn_id: Optional[int] = None
 
         def callback(indata, frames, time_info, status) -> None:
-            nonlocal segment_chunks, silence_chunks, speech_chunks, current_turn_id, pre_buffer
-            if not self._running:
-                return
-            if status:
-                logger.debug("[voice] Audio stream status: %s", status)
-            if indata is None or len(indata) == 0:
-                return
+            try:
+                nonlocal segment_chunks, silence_chunks, speech_chunks, current_turn_id, pre_buffer
+                if not self._running:
+                    return
+                if status:
+                    logger.debug("[voice] Audio stream status: %s", status)
+                if indata is None or len(indata) == 0:
+                    return
 
-            self._ping_counter += 1
-            if self._ping_counter % 50 == 0 and self._watchdog_ping:
-                self._watchdog_ping()
+                self._ping_counter += 1
+                if self._ping_counter % 50 == 0 and self._watchdog_ping:
+                    self._watchdog_ping()
 
-            raw_chunk = np.asarray(indata[:, 0], dtype=np.float32)
-            if needs_resample:
-                raw_chunk = _resample_chunk(raw_chunk, device_sample_rate, self._sample_rate)
+                raw_chunk = np.asarray(indata[:, 0], dtype=np.float32)
+                if needs_resample:
+                    raw_chunk = _resample_chunk(raw_chunk, device_sample_rate, self._sample_rate)
 
-            self._resample_buffer = np.concatenate([self._resample_buffer, raw_chunk])
+                self._resample_buffer = np.concatenate([self._resample_buffer, raw_chunk])
 
-            while len(self._resample_buffer) >= self._chunk_size:
-                chunk_16k = self._resample_buffer[:self._chunk_size]
-                self._resample_buffer = self._resample_buffer[self._chunk_size:]
+                while len(self._resample_buffer) >= self._chunk_size:
+                    chunk_16k = self._resample_buffer[:self._chunk_size]
+                    self._resample_buffer = self._resample_buffer[self._chunk_size:]
 
-                speech_now = vad.is_speech(chunk_16k)
-                chunk_bytes = float32_chunk_to_int16_bytes(chunk_16k)
+                    speech_now = vad.is_speech(chunk_16k)
+                    chunk_bytes = float32_chunk_to_int16_bytes(chunk_16k)
 
-                if segment_chunks is None:
+                    if segment_chunks is None:
+                        if speech_now:
+                            current_turn_id = self._next_turn_id()
+                            if self._face_set_state and not self._tts.is_playing():
+                                self._face_set_state("LISTENING")
+                            logger.info("[VAD] Speech detected (turn=%s)", current_turn_id)
+                            segment_chunks = deque(pre_buffer)
+                            segment_chunks.append(chunk_bytes)
+                            speech_chunks = 1
+                            silence_chunks = 0
+                            pre_buffer.clear()
+                        else:
+                            pre_buffer.append(chunk_bytes)
+                        continue
+
+                    assert current_turn_id is not None
+                    segment_chunks.append(chunk_bytes)
+                    speech_chunks += 1
                     if speech_now:
-                        current_turn_id = self._next_turn_id()
-                        if self._face_set_state and not self._tts.is_playing():
-                            self._face_set_state("LISTENING")
-                        logger.info("[VAD] Speech detected (turn=%s)", current_turn_id)
-                        segment_chunks = deque(pre_buffer)
-                        segment_chunks.append(chunk_bytes)
-                        speech_chunks = 1
                         silence_chunks = 0
-                        pre_buffer.clear()
                     else:
-                        pre_buffer.append(chunk_bytes)
-                    continue
-
-                assert current_turn_id is not None
-                segment_chunks.append(chunk_bytes)
-                speech_chunks += 1
-                if speech_now:
-                    silence_chunks = 0
-                else:
-                    silence_chunks += 1
-                if (silence_chunks >= self._silence_timeout_chunks
-                        and speech_chunks >= self._min_speech_chunks):
-                    audio_chunks = list(segment_chunks)
-                    finished_turn_id = current_turn_id
-                    segment_chunks = None
-                    silence_chunks = 0
-                    speech_chunks = 0
-                    current_turn_id = None
-                    logger.info("[VAD] Segment ended (turn=%s, chunks=%d)",
-                                finished_turn_id, len(audio_chunks))
-                    self._enqueue_segment(Segment(turn_id=finished_turn_id, audio_chunks=audio_chunks))
+                        silence_chunks += 1
+                    if (silence_chunks >= self._silence_timeout_chunks
+                            and speech_chunks >= self._min_speech_chunks):
+                        audio_chunks = list(segment_chunks)
+                        finished_turn_id = current_turn_id
+                        segment_chunks = None
+                        silence_chunks = 0
+                        speech_chunks = 0
+                        current_turn_id = None
+                        logger.info("[VAD] Segment ended (turn=%s, chunks=%d)",
+                                    finished_turn_id, len(audio_chunks))
+                        self._enqueue_segment(Segment(turn_id=finished_turn_id, audio_chunks=audio_chunks))
+            except Exception as e:
+                logger.error("[voice] Audio callback error: %s", e, exc_info=True)
 
         if self._face_set_state:
             self._face_set_state("IDLE")

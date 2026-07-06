@@ -7,6 +7,7 @@ import logging
 import logging.handlers
 import os
 import sys
+import threading
 from pathlib import Path
 
 from config.settings import get_settings, configure_platform, detect_preset
@@ -19,6 +20,7 @@ from llm.module import LLMModule
 from hardware import MotorController, BatteryMonitor
 from academic.context import AcademicContext
 from academic.server import create_academic_app, run_academic_server
+from mobile.server import create_mobile_server
 
 _SETTINGS = get_settings()
 _PRESET = detect_preset()
@@ -150,8 +152,25 @@ def main() -> None:
     voice_pipeline.start()
     logger.info("[startup] All modules initialized, entering pygame main loop")
 
+    mobile_app = create_mobile_server(
+        motor=motor,
+        battery_monitor=battery_monitor,
+        tts=tts_module,
+        llm=llm,
+        session_id=session_id,
+        academic_context=academic_context,
+        settings=_SETTINGS,
+        mic_enabled=_SETTINGS.general.mic_enabled,
+    )
+    _mobile_thread = threading.Thread(
+        target=lambda: mobile_app.run(host="0.0.0.0", port=5000, debug=False, use_reloader=False),
+        daemon=True,
+        name="mobile-api",
+    )
+    _mobile_thread.start()
+    logger.info("[mobile] API server started on port 5000")
+
     if _SETTINGS.general.dev_text_input:
-        import threading
         logger.info("[dev] Text input mode enabled — type text and press Enter")
 
         def dev_input_loop():

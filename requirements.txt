@@ -4,6 +4,8 @@ pyserial>=3.5
 requests>=2.31.0
 python-dotenv>=1.0.0
 psutil>=5.9.0
+flask>=3.0
+flask-cors>=5.0
 
 # Shutdown API (deployed separately on Railway)
 fastapi>=0.115.0
