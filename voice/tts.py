@@ -56,6 +56,19 @@ class TTSModule:
         except Exception as e:
             logger.warning("[TTS] pygame mixer init failed: %s", e)
 
+    def _ensure_mixer_initialized(self) -> bool:
+        import pygame
+        if pygame.mixer.get_init():
+            return True
+        try:
+            pygame.mixer.pre_init(frequency=44100, size=-16, channels=2, buffer=2048)
+            pygame.mixer.init()
+            logger.info("[TTS] pygame.mixer initialized standalone")
+            return True
+        except Exception as e:
+            logger.error("[TTS] Failed to initialize pygame.mixer: %s", e)
+            return False
+
     def set_callbacks(
         self,
         on_start: Optional[callable] = None,
@@ -104,16 +117,9 @@ class TTSModule:
             raise TTSModuleError(f"No audio received for voice {voice}") from e
 
     def _play(self, path: str, request_id: int) -> None:
-        if not self._pygame.mixer.get_init():
-            logger.warning("[TTS] Mixer not initialized yet, waiting...")
-            import time as _time
-            for _ in range(20):
-                _time.sleep(0.1)
-                if self._pygame.mixer.get_init():
-                    break
-            else:
-                logger.error("[TTS] Mixer never initialized -- skipping playback")
-                return
+        if not self._ensure_mixer_initialized():
+            logger.error("[TTS] Cannot play — mixer unavailable")
+            return
         try:
             if self._stop_event.is_set():
                 return
@@ -211,16 +217,9 @@ class TTSModule:
                 pass
 
     def speak_and_wait(self, text: str, language: Optional[str] = None) -> None:
-        if not self._pygame.mixer.get_init():
-            logger.warning("[TTS] Mixer not initialized yet, waiting...")
-            import time as _time
-            for _ in range(20):
-                _time.sleep(0.1)
-                if self._pygame.mixer.get_init():
-                    break
-            else:
-                logger.error("[TTS] Mixer never initialized -- skipping playback")
-                return
+        if not self._ensure_mixer_initialized():
+            logger.error("[TTS] Cannot play — mixer unavailable")
+            return
         self.speak(text, language=language)
         while self._pygame.mixer.music.get_busy():
             time.sleep(0.05)

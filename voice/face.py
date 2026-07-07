@@ -478,7 +478,17 @@ class FaceModule:
         os.environ.setdefault("PYGAME_HIDE_SUPPORT_PROMPT", "1")
         import pygame
 
-        pygame.display.init()
+        # Initialize mixer first — works without display
+        pygame.mixer.pre_init(frequency=44100, size=-16, channels=2, buffer=2048)
+        pygame.mixer.init()
+
+        # Then try display init separately
+        try:
+            pygame.display.init()
+        except Exception as e:
+            logger.warning("[face] Display init failed (headless?): %s", e)
+
+        # Rest of pygame init
         pygame.font.init()
         flags = pygame.FULLSCREEN if self._fullscreen else 0
         screen = pygame.display.set_mode((self.W, self.H), flags)
