@@ -104,6 +104,16 @@ class TTSModule:
             raise TTSModuleError(f"No audio received for voice {voice}") from e
 
     def _play(self, path: str, request_id: int) -> None:
+        if not self._pygame.mixer.get_init():
+            logger.warning("[TTS] Mixer not initialized yet, waiting...")
+            import time as _time
+            for _ in range(20):
+                _time.sleep(0.1)
+                if self._pygame.mixer.get_init():
+                    break
+            else:
+                logger.error("[TTS] Mixer never initialized -- skipping playback")
+                return
         try:
             if self._stop_event.is_set():
                 return
@@ -201,6 +211,16 @@ class TTSModule:
                 pass
 
     def speak_and_wait(self, text: str, language: Optional[str] = None) -> None:
+        if not self._pygame.mixer.get_init():
+            logger.warning("[TTS] Mixer not initialized yet, waiting...")
+            import time as _time
+            for _ in range(20):
+                _time.sleep(0.1)
+                if self._pygame.mixer.get_init():
+                    break
+            else:
+                logger.error("[TTS] Mixer never initialized -- skipping playback")
+                return
         self.speak(text, language=language)
         while self._pygame.mixer.music.get_busy():
             time.sleep(0.05)

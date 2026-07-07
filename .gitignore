@@ -29,6 +29,8 @@ data/
 # Wake word data (large audio files — don't commit)
 wake_word_data/
 
+reference_project/
+
 # Large model files
 models/*.pt
 models/*.pth
