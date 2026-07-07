@@ -18,6 +18,23 @@ print_error(){ echo -e "  [${RED}ERROR${NC}] $1"; }
 print_warn() { echo -e "  [${YELLOW}WARN${NC}] $1"; }
 print_info() { echo -e "  [${CYAN}INFO${NC}] $1"; }
 
+# ── Retry wrapper (3 attempts, 5s delay) ─────────────────────────
+run_with_retry() {
+    local cmd="$1"
+    local label="$2"
+    local attempt
+    for attempt in $(seq 1 3); do
+        if eval "$cmd"; then
+            return 0
+        fi
+        if [ $attempt -lt 3 ]; then
+            echo -e "  ${YELLOW}$label (attempt ${attempt}/3) — retrying in 5s...${NC}"
+            sleep 5
+        fi
+    done
+    return 1
+}
+
 # ── Banner ────────────────────────────────────────────────────────
 echo ""
 echo -e "${CYAN}============================================${NC}"
@@ -56,22 +73,28 @@ print_ok "Python ${PY_MAJOR}.${PY_MINOR}"
 
 # ── 2. System packages ───────────────────────────────────────────
 if [ "$SKIP_APT" = false ]; then
-    print_info "Updating apt package list..."
-    sudo apt-get update -qq
-
-    print_info "Installing system dependencies..."
-    sudo apt-get install -y \
-        python3-pip python3-venv python3-dev \
+    print_info "Updating apt package list and installing system dependencies..."
+    APT_PKGS="python3-pip python3-venv python3-dev \
         portaudio19-dev libsdl2-dev libsdl2-mixer-dev \
         libopenblas-dev libopenblas0 libopencv-dev \
-        ffmpeg git wget curl libcamera-apps
+        ffmpeg git wget curl libcamera-apps"
 
-    print_ok "System packages installed"
+    if run_with_retry "sudo apt-get update -qq && sudo apt-get install -y $APT_PKGS" "System packages"; then
+        print_ok "System packages installed"
+    else
+        print_warn "Some system packages could not be installed (non-fatal)"
+        print_warn "Run: sudo apt-get install -y $APT_PKGS"
+    fi
 
     if [ "$IS_PI" = true ]; then
         print_info "Installing picamera2 system packages (pre-venv)..."
-        sudo apt-get install -y python3-libcamera python3-picamera2 python3-kms++
-        print_ok "picamera2 system packages installed"
+        PI_PKGS="python3-libcamera python3-picamera2 python3-kms++"
+        if run_with_retry "sudo apt-get install -y $PI_PKGS" "picamera2 packages"; then
+            print_ok "picamera2 system packages installed"
+        else
+            print_warn "picamera2 packages could not be installed (non-fatal)"
+            print_warn "Run: sudo apt-get install -y $PI_PKGS"
+        fi
     fi
 else
     print_info "Skipping apt-get system packages (--resume mode)"
@@ -80,12 +103,21 @@ fi
 # ── 3. Virtual environment ───────────────────────────────────────
 print_info "Setting up virtual environment..."
 if [ ! -d "venv" ]; then
+    VENV_CMD="python3 -m venv venv"
     if [ "$IS_PI" = true ]; then
-        python3 -m venv venv --system-site-packages
-        print_ok "Created venv with --system-site-packages (required for libcamera on Pi)"
+        VENV_CMD="python3 -m venv venv --system-site-packages"
+    fi
+
+    if run_with_retry "$VENV_CMD" "Virtual environment creation"; then
+        if [ "$IS_PI" = true ]; then
+            print_ok "Created venv with --system-site-packages (required for libcamera on Pi)"
+        else
+            print_ok "Virtual environment created at ./venv"
+        fi
     else
-        python3 -m venv venv
-        print_ok "Virtual environment created at ./venv"
+        print_error "Failed to create virtual environment."
+        print_error "Try: $VENV_CMD"
+        exit 1
     fi
 else
     print_ok "Virtual environment already exists"
@@ -105,8 +137,11 @@ fi
 source venv/bin/activate
 
 print_info "Upgrading pip..."
-pip install --upgrade pip -q
-print_ok "pip upgraded"
+if run_with_retry "pip install --upgrade pip -q" "pip upgrade"; then
+    print_ok "pip upgraded"
+else
+    print_warn "pip upgrade failed — continuing with current version"
+fi
 
 # ── 4. Resilient package installation ──────────────────────────────
 
@@ -218,12 +253,16 @@ done
 
 # ── 6. .env file ─────────────────────────────────────────────────
 if [ ! -f ".env" ]; then
-    if [ -f ".env.example" ]; then
+    if [ "$IS_PI" = true ] && [ -f ".env.pi" ]; then
+        cp .env.pi .env
+        print_ok "Created .env from .env.pi (Pi-optimized settings)"
+        print_warn "Edit .env and add your ROBOT_OPENROUTER_API_KEY"
+    elif [ -f ".env.example" ]; then
         cp .env.example .env
         print_ok "Created .env from .env.example"
         print_warn "Edit .env and add your ROBOT_OPENROUTER_API_KEY"
     else
-        print_warn ".env.example not found — create .env manually"
+        print_warn ".env template not found — create .env manually"
     fi
 else
     print_warn ".env already exists, skipping"
@@ -236,20 +275,22 @@ PROTO_URL="https://raw.githubusercontent.com/opencv/opencv/master/samples/dnn/fa
 WEIGHTS_URL="https://github.com/opencv/opencv_3rdparty/raw/dnn_samples_face_detector_20170830/res10_300x300_ssd_iter_140000.caffemodel"
 
 if [ ! -f "models/deploy.prototxt" ]; then
-    if wget -q --show-progress -O models/deploy.prototxt "$PROTO_URL"; then
+    if run_with_retry "wget -q --show-progress -O models/deploy.prototxt '$PROTO_URL'" "deploy.prototxt"; then
         print_ok "Downloaded deploy.prototxt"
     else
-        print_warn "Failed to download deploy.prototxt — download manually from: $PROTO_URL"
+        print_warn "Failed to download deploy.prototxt"
+        print_warn "Download manually: $PROTO_URL → models/deploy.prototxt"
     fi
 else
     print_ok "deploy.prototxt already present"
 fi
 
 if [ ! -f "models/res10_300x300_ssd_iter_140000.caffemodel" ]; then
-    if wget -q --show-progress -O models/res10_300x300_ssd_iter_140000.caffemodel "$WEIGHTS_URL"; then
+    if run_with_retry "wget -q --show-progress -O models/res10_300x300_ssd_iter_140000.caffemodel '$WEIGHTS_URL'" "caffemodel"; then
         print_ok "Downloaded res10_300x300_ssd_iter_140000.caffemodel"
     else
-        print_warn "Failed to download caffemodel — download manually from: $WEIGHTS_URL"
+        print_warn "Failed to download caffemodel"
+        print_warn "Download manually: $WEIGHTS_URL → models/res10_300x300_ssd_iter_140000.caffemodel"
     fi
 else
     print_ok "res10_300x300_ssd_iter_140000.caffemodel already present"
@@ -392,7 +433,24 @@ else
     print_warn "Health check completed with warnings — review output above"
 fi
 
-# ── 11. FINAL PRE-FLIGHT CHECK ───────────────────────────────────
+# ── 11. Audio device diagnostic ────────────────────────────────
+echo ""
+print_info "Detected audio input devices..."
+echo ""
+venv/bin/python -c "
+import sounddevice as sd
+devices = sd.query_devices()
+found = False
+for i, d in enumerate(devices):
+    if d['max_input_channels'] > 0:
+        print(f'  [{i}] {d[\"name\"]} — {d[\"max_input_channels\"]}ch, {d[\"default_samplerate\"]}Hz')
+        found = True
+if not found:
+    print('  No input devices found — check USB microphone connection')
+" 2>&1 || print_warn "Could not query audio devices"
+echo ""
+
+# ── 12. FINAL PRE-FLIGHT CHECK ───────────────────────────────────
 echo ""
 echo -e "${CYAN}==================================================${NC}"
 echo -e "${CYAN}  FINAL PRE-FLIGHT CHECK${NC}"
@@ -539,17 +597,18 @@ echo ""
 if [ "$PF_FAILS" -eq 0 ]; then
     echo -e "  ${GREEN}READY — run: python main.py${NC}"
 else
-    echo -e "  ${RED}NOT READY — fix the FAILED items above before running main.py${NC}"
+    echo -e "  ${YELLOW}Some optional checks did not pass — review items above${NC}"
     echo ""
-    echo -e "  ${YELLOW}Failed checks and fixes:${NC}"
+    echo -e "  ${YELLOW}Items to review:${NC}"
     for i in "${!PF_NAMES[@]}"; do
         if [ "${PF_RESULTS[$i]}" = "FAIL" ]; then
             echo -e "    - ${PF_NAMES[$i]}: ${PF_DETAILS[$i]}"
         fi
     done
+    echo -e "  ${YELLOW}The robot may still work — run python main.py to test${NC}"
 fi
 
-# ── 12. Setup complete ────────────────────────────────────────────
+# ── 13. Setup complete ────────────────────────────────────────────
 echo ""
 total_requested=$(( ${#INSTALLED_PKGS[@]} + ${#FAILED_PKGS[@]} ))
 echo -e "${GREEN}============================================${NC}"

@@ -31,7 +31,6 @@ FILLER_PHRASES = {
     "ar": [
         "لحظة بفكر...",
         "سؤال حلو، خليني أفكر...",
-        "ثواني كدا اظبطها في دماغي و اقولك...",
         "تمام، بفكر معاك...",
         "اكيد, بفكر شويه...",
         "ثواني بفكر في الموضوع...",
@@ -427,11 +426,7 @@ class VoicePipeline:
 
                 raw_chunk = np.asarray(indata[:, 0], dtype=np.float32)
                 if needs_resample:
-                    target_len = int(len(raw_chunk) * self._sample_rate / device_sample_rate)
-                    if target_len > 0 and len(raw_chunk) != target_len:
-                        step = len(raw_chunk) / target_len
-                        indices = np.arange(0, len(raw_chunk), step)[:target_len].astype(int)
-                        raw_chunk = raw_chunk[indices].astype(np.float32)
+                    raw_chunk = _resample_chunk(raw_chunk, device_sample_rate, self._sample_rate)
 
                 self._resample_buffer = np.concatenate([self._resample_buffer, raw_chunk])
 
