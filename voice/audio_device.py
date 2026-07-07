@@ -107,6 +107,13 @@ def get_sounddevice_index(alsa_card: Optional[int] = None) -> Optional[int]:
         logger.info("Using system default input device index %d", default)
         return int(default)
 
+    # Generic USB microphone name scan (cross-platform fallback)
+    for i, dev in enumerate(sd.query_devices()):
+        name_lower = dev["name"].lower()
+        if dev["max_input_channels"] > 0 and any(kw in name_lower for kw in ("usb", "microphone", "mic", "input")):
+            logger.info("Matched device %d '%s' (generic mic name scan)", i, dev["name"])
+            return i
+
     for i, dev in enumerate(sd.query_devices()):
         if dev["max_input_channels"] > 0:
             logger.info("Fallback to device %d '%s' (has input channels)", i, dev["name"])
