@@ -427,7 +427,11 @@ class VoicePipeline:
 
                 raw_chunk = np.asarray(indata[:, 0], dtype=np.float32)
                 if needs_resample:
-                    raw_chunk = _resample_chunk(raw_chunk, device_sample_rate, self._sample_rate)
+                    target_len = int(len(raw_chunk) * self._sample_rate / device_sample_rate)
+                    if target_len > 0 and len(raw_chunk) != target_len:
+                        step = len(raw_chunk) / target_len
+                        indices = np.arange(0, len(raw_chunk), step)[:target_len].astype(int)
+                        raw_chunk = raw_chunk[indices].astype(np.float32)
 
                 self._resample_buffer = np.concatenate([self._resample_buffer, raw_chunk])
 
@@ -444,8 +448,14 @@ class VoicePipeline:
                         chunk_16k = chunk_16k * gain
                         chunk_16k = np.clip(chunk_16k, -1.0, 1.0)
 
-                    speech_now = vad.is_speech(chunk_16k)
                     chunk_bytes = float32_chunk_to_int16_bytes(chunk_16k)
+
+                    rms = float(np.sqrt(np.mean(chunk_16k ** 2)))
+                    if rms < 0.005:
+                        pre_buffer.append(chunk_bytes)
+                        return
+
+                    speech_now = vad.is_speech(chunk_16k)
 
                     if segment_chunks is None:
                         if speech_now:
@@ -486,6 +496,9 @@ class VoicePipeline:
         if self._face_set_state:
             self._face_set_state("IDLE")
         logger.info("[voice] Listening...")
+
+        sd.stop()
+        time.sleep(0.2)
 
         try:
             with sd.InputStream(
