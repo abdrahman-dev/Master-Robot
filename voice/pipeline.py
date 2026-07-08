@@ -174,6 +174,7 @@ class VoicePipeline:
 
         self._watchdog_ping: Optional[Callable] = None
         self._ping_counter = 0
+        self._diag_count = 0
         self._wake_word_active = False
         self._wake_word_count = 0
 
@@ -355,6 +356,15 @@ class VoicePipeline:
                 self._face_set_state("IDLE")
 
     def run_forever(self) -> None:
+        # Ensure logging is visible when running standalone (not via main.py)
+        root = logging.getLogger()
+        if not root.hasHandlers():
+            handler = logging.StreamHandler()
+            handler.setLevel(logging.INFO)
+            handler.setFormatter(logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
+            root.addHandler(handler)
+            root.setLevel(logging.INFO)
+
         if not _SETTINGS.general.mic_enabled:
             logger.info("[voice] Microphone disabled via ROBOT_MIC_ENABLED=false")
             return
@@ -460,7 +470,8 @@ class VoicePipeline:
 
                     chunk_16k = preprocessor.process(chunk_16k)
 
-                    if self._ping_counter % 100 == 0:
+                    if self._diag_count < 5 or self._ping_counter % 100 == 0:
+                        self._diag_count += 1
                         logger.info(
                             "[diag] noise_floor=%.5f rms=%.5f snr=%.1fdB gate=%.5f",
                             preprocessor.last_noise_floor,
