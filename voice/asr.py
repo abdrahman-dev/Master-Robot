@@ -72,19 +72,13 @@ def _transcribe_whisper(
     # Convert int16 bytes to float32 array
     audio_np = np.frombuffer(audio_bytes, dtype=np.int16).astype(np.float32) / 32768.0
 
-    # Safety normalization — boost if the segment is too quiet (e.g. low-gain Pi mic)
-    peak = np.max(np.abs(audio_np))
-    if peak > 0 and peak < 0.3:
-        audio_np = audio_np * (0.3 / peak)
-        audio_np = np.clip(audio_np, -1.0, 1.0)
-
     whisper_lang = None if language == "auto" else language
 
     segments, info = model.transcribe(
         audio_np,
         language=whisper_lang,
         beam_size=5,
-        vad_filter=False,
+        vad_filter=True,
     )
 
     text = " ".join(seg.text for seg in segments).strip()

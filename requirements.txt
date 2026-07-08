@@ -14,10 +14,14 @@ uvicorn>=0.32.0
 rapidfuzz>=3.0.0
 speechrecognition>=3.8.0
 sounddevice>=0.4.0
-scipy>=1.10.0
+scipy>=1.10.0              # optional — polyphase resampling; falls back to numpy.interp
 torch>=2.0.0
 torchaudio>=2.0.0
 edge-tts>=6.1.9
+
+# Audio Preprocessing
+webrtc-noise>=0.1.0
+# rnnoise                    # optional — better noise suppression; auto-detected if installed
 
 # Vision Pipeline
 opencv-python>=4.8.0

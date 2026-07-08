@@ -225,6 +225,28 @@ class MotorSettings:
 
 
 @dataclass(frozen=True)
+class AudioSettings:
+    enable_dc_removal: bool = True
+    enable_hpf: bool = True
+    enable_noise_suppression: bool = True
+    enable_pre_emphasis: bool = False
+    enable_agc: bool = True
+    enable_limiter: bool = True
+
+    hp_cutoff_hz: float = 80.0
+    pre_emphasis_coeff: float = 0.97
+    noise_suppression_aggressiveness: int = int(os.getenv("ROBOT_NS_AGGRESSIVENESS", "2"))
+    agc_target_rms: float = float(os.getenv("ROBOT_AGC_TARGET_RMS", "0.15"))
+    agc_attack_rate: float = float(os.getenv("ROBOT_AGC_ATTACK", "0.2"))
+    agc_release_rate: float = float(os.getenv("ROBOT_AGC_RELEASE", "0.01"))
+    agc_max_gain: float = float(os.getenv("ROBOT_AGC_MAX_GAIN", "10.0"))
+    limiter_threshold_db: float = float(os.getenv("ROBOT_LIMITER_THRESHOLD_DB", "-1.0"))
+    noise_gate_floor_multiplier: float = float(os.getenv("ROBOT_GATE_FLOOR_MULT", "2.5"))
+    noise_gate_floor_min: float = float(os.getenv("ROBOT_GATE_FLOOR_MIN", "0.003"))
+    calibration_duration_sec: float = float(os.getenv("ROBOT_CALIBRATION_SEC", "2.0"))
+
+
+@dataclass(frozen=True)
 class BatterySettings:
     low_voltage_threshold: float = float(os.getenv("ROBOT_BATTERY_LOW_VOLTAGE", "7.1"))
     critical_voltage_threshold: float = float(os.getenv("ROBOT_BATTERY_CRITICAL_VOLTAGE", "6.5"))
@@ -253,6 +275,7 @@ class Settings:
     llm: LLMSettings
     tts: TTSSettings
     academic: AcademicSettings
+    audio: AudioSettings
     servo: ServoSettings
     motor: MotorSettings
     battery: BatterySettings
@@ -271,6 +294,7 @@ def get_settings() -> Settings:
         llm=LLMSettings(),
         tts=TTSSettings(),
         academic=AcademicSettings(),
+        audio=AudioSettings(),
         servo=ServoSettings(),
         motor=MotorSettings(),
         battery=BatterySettings(),

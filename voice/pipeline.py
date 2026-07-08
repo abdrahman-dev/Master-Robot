@@ -14,18 +14,9 @@ from rapidfuzz import fuzz
 
 from config.settings import get_settings
 from voice import asr, tts, vad
+from voice.audio_preprocessor import AudioPreprocessor, SegmentEnhancer, resample_chunk
 from voice.tts import TTSModule
 from llm.module import LLMModule, LLMModuleError
-
-
-def _resample_chunk(chunk: np.ndarray, orig_rate: int, target_rate: int) -> np.ndarray:
-    if orig_rate == target_rate:
-        return chunk
-    duration = chunk.shape[0] / float(orig_rate)
-    target_len = max(1, int(round(duration * target_rate)))
-    src_x = np.linspace(0.0, duration, num=chunk.shape[0], endpoint=False, dtype=np.float64)
-    dst_x = np.linspace(0.0, duration, num=target_len, endpoint=False, dtype=np.float64)
-    return np.interp(dst_x, src_x, chunk).astype(np.float32, copy=False)
 
 FILLER_PHRASES = {
     "ar": [
@@ -179,8 +170,7 @@ class VoicePipeline:
         self._dropped_segments = 0
         self._total_segments = 0
 
-        # Running RMS tracker for automatic gain normalization (critical for Pi's quiet USB mics)
-        self._rms_level = 1e-4
+        self._segment_enhancer = SegmentEnhancer(self._sample_rate, _SETTINGS.audio)
 
         self._watchdog_ping: Optional[Callable] = None
         self._ping_counter = 0
@@ -232,6 +222,20 @@ class VoicePipeline:
         try:
             logger.info("[ASR] Transcribing speech segment...")
             audio_bytes = b"".join(segment.audio_chunks)
+
+            audio_np = np.frombuffer(audio_bytes, dtype=np.int16).astype(np.float32) / 32768.0
+            self._segment_enhancer.reset()
+            audio_np = self._segment_enhancer.process(audio_np)
+            audio_np = np.clip(audio_np, -1.0, 1.0)
+            audio_bytes = (audio_np * 32767.0).astype(np.int16).tobytes()
+
+            logger.info(
+                "[diag] segment_len=%.2fs agc_gain=%.2f peak_db=%.1f",
+                len(audio_np) / self._sample_rate,
+                self._segment_enhancer.last_agc_gain,
+                self._segment_enhancer.last_peak_db,
+            )
+
             t0 = time.monotonic()
             text, detected_lang = asr.transcribe(
                 audio_bytes,
@@ -400,6 +404,10 @@ class VoicePipeline:
                 device_sample_rate, self._sample_rate, up, down,
             )
 
+        preprocessor = AudioPreprocessor(self._sample_rate, _SETTINGS.audio)
+        calibrating = True
+        calibration_start = time.monotonic()
+
         pre_buffer: Deque[bytes] = deque(maxlen=self._pre_chunks)
         segment_chunks: Optional[Deque[bytes]] = None
         silence_chunks = 0
@@ -409,6 +417,7 @@ class VoicePipeline:
         def callback(indata, frames, time_info, status) -> None:
             try:
                 nonlocal segment_chunks, silence_chunks, speech_chunks, current_turn_id, pre_buffer
+                nonlocal calibrating, calibration_start
                 if not self._running:
                     return
                 if status:
@@ -422,13 +431,12 @@ class VoicePipeline:
 
                 raw_chunk = np.asarray(indata[:, 0], dtype=np.float32)
                 if needs_resample:
-                    raw_chunk = _resample_chunk(raw_chunk, device_sample_rate, self._sample_rate)
+                    raw_chunk = resample_chunk(raw_chunk, device_sample_rate, self._sample_rate)
 
                 self._resample_parts.append(raw_chunk)
                 self._resample_total += len(raw_chunk)
 
                 while self._resample_total >= self._chunk_size:
-                    # Flatten accumulated parts into one contiguous array
                     if len(self._resample_parts) == 1:
                         big = self._resample_parts[0]
                     else:
@@ -438,19 +446,38 @@ class VoicePipeline:
                     self._resample_parts = [leftover] if len(leftover) > 0 else []
                     self._resample_total = len(leftover)
 
-                    # Gentle AGC: only boost quiet audio, never reduce normal/loud audio
-                    rms = np.sqrt(np.mean(chunk_16k ** 2))
-                    self._rms_level = 0.92 * self._rms_level + 0.08 * max(rms, 1e-8)
-                    if self._rms_level < 0.08:
-                        gain = 0.10 / max(self._rms_level, 1e-8)
-                        gain = min(gain, 10.0)
-                        chunk_16k = chunk_16k * gain
-                        chunk_16k = np.clip(chunk_16k, -1.0, 1.0)
+                    if calibrating:
+                        preprocessor.feed_calibration(chunk_16k)
+                        elapsed = time.monotonic() - calibration_start
+                        if elapsed >= preprocessor.calibration_seconds:
+                            preprocessor.finalize_calibration()
+                            calibrating = False
+                            logger.info(
+                                "[voice] Calibration done: noise_floor=%.5f",
+                                preprocessor.noise_floor,
+                            )
+                        continue
+
+                    chunk_16k = preprocessor.process(chunk_16k)
+
+                    if self._ping_counter % 100 == 0:
+                        logger.info(
+                            "[diag] noise_floor=%.5f rms=%.5f snr=%.1fdB gate=%.5f",
+                            preprocessor.last_noise_floor,
+                            preprocessor.last_rms,
+                            preprocessor.last_snr_estimate,
+                            max(preprocessor.noise_floor * _SETTINGS.audio.noise_gate_floor_multiplier,
+                                _SETTINGS.audio.noise_gate_floor_min),
+                        )
 
                     chunk_bytes = float32_chunk_to_int16_bytes(chunk_16k)
 
-                    rms = float(np.sqrt(np.mean(chunk_16k ** 2)))
-                    if segment_chunks is None and rms < 0.005:
+                    rms = preprocessor.last_rms
+                    gate_threshold = max(
+                        preprocessor.noise_floor * _SETTINGS.audio.noise_gate_floor_multiplier,
+                        _SETTINGS.audio.noise_gate_floor_min,
+                    )
+                    if segment_chunks is None and rms < gate_threshold:
                         pre_buffer.append(chunk_bytes)
                         continue
 
@@ -523,6 +550,7 @@ class VoicePipeline:
         finally:
             self._resample_parts = []
             self._resample_total = 0
+            preprocessor.reset()
 
         logger.info("[voice] Audio stream closed")
 
