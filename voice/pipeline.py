@@ -355,6 +355,139 @@ class VoicePipeline:
             if self._face_set_state:
                 self._face_set_state("IDLE")
 
+    def feed_external_audio(self, audio: np.ndarray, sample_rate: int,
+                             wake_override: bool = True) -> dict:
+        """Process externally-supplied audio (e.g. from mobile app) synchronously.
+
+        Returns a dict with keys:
+          success, text, response, language, processing_time
+        or:
+          success (False), reason ("no_speech" | "wake_word_required")
+        """
+        t_start = time.monotonic()
+        logger.info("[ext] Processing external audio (sr=%d, len=%.2fs, wake_override=%s)",
+                     sample_rate, len(audio) / max(sample_rate, 1), wake_override)
+
+        try:
+            # 1. Resample to pipeline sample rate
+            if sample_rate != self._sample_rate:
+                audio = resample_chunk(audio, sample_rate, self._sample_rate)
+                logger.info("[ext] Resampled to %d Hz", self._sample_rate)
+
+            # 2. AudioPreprocessor (DC removal, HPF, noise floor)
+            preprocessor = AudioPreprocessor(self._sample_rate, _SETTINGS.audio)
+            cal_samples = min(int(self._sample_rate * 0.5), len(audio))
+            if cal_samples > 0:
+                preprocessor.feed_calibration(audio[:cal_samples])
+            preprocessor.finalize_calibration()
+            audio = preprocessor.process(audio)
+
+            # 3. VAD check
+            if not vad.is_speech(audio):
+                logger.info("[ext] No speech detected")
+                return {"success": False, "reason": "no_speech"}
+
+            # 4. SegmentEnhancer (noise suppression, AGC, limiter) — fresh instance
+            enhancer = SegmentEnhancer(self._sample_rate, _SETTINGS.audio)
+            audio_np = enhancer.process(audio.astype(np.float32))
+            audio_np = np.clip(audio_np, -1.0, 1.0)
+            logger.info("[diag] ext segment agc_gain=%.2f peak_db=%.1f",
+                        enhancer.last_agc_gain, enhancer.last_peak_db)
+
+            # 5. ASR
+            audio_bytes = (audio_np * 32767.0).astype(np.int16).tobytes()
+            t_asr = time.monotonic()
+            text, detected_lang = asr.transcribe(
+                audio_bytes, samplerate=self._sample_rate, language="ar",
+            )
+            asr_time = time.monotonic() - t_asr
+            logger.info("[ext] ASR result=%r lang=%r time=%.2fs", text, detected_lang, asr_time)
+
+            if not text:
+                return {"success": False, "reason": "no_speech"}
+
+            # 6. Wake word
+            if wake_override:
+                self._wake_word_active = True
+            elif _is_wake_word(text):
+                self._wake_word_active = True
+                logger.info("[ext] Wake word detected via external audio")
+
+            if not self._wake_word_active:
+                return {"success": False, "reason": "wake_word_required", "text": text}
+
+            # 7. Face state
+            if self._face_set_state:
+                self._face_set_state("THINKING")
+
+            # 8. Motor command check
+            cmd = _extract_move_command(text)
+            if cmd is not None and self._motor is not None and self._motor.is_available():
+                method_name, duration_ms = cmd
+                getattr(self._motor, method_name)(duration_ms)
+                logger.info("[ext] Motor command: %s(%s)", method_name, duration_ms)
+
+            # 9. Vision context
+            vision_context = None
+            if self._vision_context_getter:
+                ctx = self._vision_context_getter()
+                faces = ctx.get("faces", [])
+                objects = ctx.get("objects", {}).get("objects", [])
+                obstacle = ctx.get("obstacle", {}).get("obstacle_detected", False)
+                gesture = ctx.get("gesture", {}).get("gesture", "none")
+                emotion = ctx.get("emotion", {}).get("emotion", "neutral")
+                has_real_data = (
+                    len(faces) > 0 or len(objects) > 0 or obstacle
+                    or gesture not in ("none", "", "unknown")
+                    or emotion not in ("neutral", "", "none")
+                )
+                if has_real_data:
+                    vision_context = ctx
+
+            # 10. Academic context
+            academic_ctx = None
+            if self._academic_context and self._academic_context.is_active():
+                academic_ctx = self._academic_context.get_formatted(detected_lang)
+
+            # 11. LLM
+            t_llm = time.monotonic()
+            try:
+                response = self._llm.chat(
+                    self._session_id, text,
+                    vision_context=vision_context,
+                    academic_context=academic_ctx,
+                )
+            except LLMModuleError:
+                logger.warning("[ext] LLM unavailable, using fallback")
+                lang = detected_lang if detected_lang in ("ar", "en") else "en"
+                response = random.choice(FALLBACK_MESSAGES[lang])
+            llm_time = time.monotonic() - t_llm
+            logger.info("[ext] LLM response_time=%.2fs", llm_time)
+
+            # 12. TTS
+            if detected_lang:
+                logger.info("[ext] TTS (lang=%s)", detected_lang)
+                self._tts.stop()
+                self._tts.speak(response, language=detected_lang)
+            else:
+                logger.warning("[ext] No detected language, skipping TTS")
+
+            self._wake_word_active = False
+            total = time.monotonic() - t_start
+            logger.info("[ext] Total processing time=%.2fs", total)
+
+            return {
+                "success": True,
+                "text": text,
+                "response": response,
+                "language": detected_lang or "ar",
+                "processing_time": round(total, 2),
+            }
+
+        except Exception as exc:
+            logger.exception("[ext] Processing failed: %s", exc)
+            return {"success": False, "reason": "internal_error", "error": str(exc)}
+
     def run_forever(self) -> None:
         # Ensure logging is visible when running standalone (not via main.py)
         root = logging.getLogger()

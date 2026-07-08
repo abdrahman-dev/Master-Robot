@@ -161,6 +161,7 @@ def main() -> None:
         settings=_SETTINGS,
         mic_enabled=_SETTINGS.general.mic_enabled,
         face=face,
+        voice_pipeline=voice_pipeline,
     )
     _mobile_thread = threading.Thread(
         target=lambda: mobile_app.run(host="0.0.0.0", port=5000, debug=False, use_reloader=False),

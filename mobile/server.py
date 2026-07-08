@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import io
 import logging
 import os
 import sys
@@ -7,10 +8,65 @@ import threading
 import time
 from typing import Optional
 
+import numpy as np
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 
 logger = logging.getLogger(__name__)
+
+
+def _decode_audio(file_storage) -> tuple:
+    """Decode uploaded audio to (np.float32 array, sample_rate).
+
+    Supports WAV (stdlib) and any format pydub+ffmpeg handles.
+    Returns (None, None) on failure.
+    """
+    filename = (file_storage.filename or "").lower()
+    ext = filename.rsplit(".", 1)[-1] if "." in filename else ""
+
+    try:
+        import pydub
+        audio_seg = pydub.AudioSegment.from_file(file_storage)
+        sr = audio_seg.frame_rate
+        if audio_seg.channels > 1:
+            audio_seg = audio_seg.set_channels(1)
+        raw = np.array(audio_seg.get_array_of_samples(), dtype=np.float32)
+        raw /= (1 << (8 * audio_seg.sample_width - 1))
+        return raw, sr
+    except ImportError:
+        logger.debug("[voice] pydub not available, trying stdlib wave")
+    except Exception as exc:
+        logger.warning("[voice] pydub decode failed: %s", exc)
+
+    if ext == "wav":
+        try:
+            import wave
+            file_storage.seek(0)
+            with wave.open(file_storage, "rb") as wf:
+                sr = wf.getframerate()
+                nchannels = wf.getnchannels()
+                sw = wf.getsampwidth()
+                frames = wf.readframes(wf.getnframes())
+            raw = np.frombuffer(frames, dtype=np.int16).astype(np.float32)
+            raw /= 32768.0
+            if nchannels > 1:
+                raw = raw.reshape(-1, nchannels).mean(axis=1)
+            return raw, sr
+        except Exception as exc:
+            logger.warning("[voice] wave decode failed: %s", exc)
+            return None, None
+
+    if ext == "pcm":
+        try:
+            raw = np.frombuffer(file_storage.read(), dtype=np.int16).astype(np.float32)
+            raw /= 32768.0
+            return raw, 16000
+        except Exception as exc:
+            logger.warning("[voice] PCM decode failed: %s", exc)
+            return None, None
+
+    logger.warning("[voice] Unsupported format: %r (install pydub for wider support)", ext)
+    return None, None
 
 
 def battery_status(battery_monitor) -> dict:
@@ -54,6 +110,7 @@ def create_mobile_server(
     settings,
     mic_enabled: bool = True,
     face=None,
+    voice_pipeline=None,
 ):
     app = Flask(__name__)
     CORS(app)
@@ -183,6 +240,55 @@ def create_mobile_server(
             logger.error("[mobile] Command error: %s", e, exc_info=True)
             return jsonify({"success": False, "error": str(e)})
 
+    @app.route("/voice", methods=["POST"])
+    def handle_voice():
+        """Receive microphone audio from the mobile app and process through the full pipeline."""
+        t_req = time.monotonic()
+        client_ip = request.remote_addr or "unknown"
+
+        if voice_pipeline is None:
+            logger.warning("[voice] /voice called but pipeline not available")
+            return jsonify({"success": False, "reason": "pipeline_unavailable"}), 503
+
+        if "audio" not in request.files:
+            logger.warning("[voice] /voice from %s: no audio field", client_ip)
+            return jsonify({"success": False, "reason": "missing_audio"}), 400
+
+        file_storage = request.files["audio"]
+        if not file_storage.filename:
+            return jsonify({"success": False, "reason": "empty_filename"}), 400
+
+        audio_np, sample_rate = _decode_audio(file_storage)
+        if audio_np is None or sample_rate is None:
+            logger.warning("[voice] /voice from %s: decode failed", client_ip)
+            return jsonify({"success": False, "reason": "decode_failed"}), 415
+
+        if len(audio_np) == 0:
+            logger.warning("[voice] /voice from %s: empty audio", client_ip)
+            return jsonify({"success": False, "reason": "empty_audio"}), 422
+
+        duration = len(audio_np) / float(sample_rate)
+        ext = (file_storage.filename or "").rsplit(".", 1)[-1] if "." in (file_storage.filename or "") else "unknown"
+        logger.info(
+            "[voice] /voice from %s | fmt=%s size=%d samples sr=%d duration=%.2fs",
+            client_ip, ext, len(audio_np), sample_rate, duration,
+        )
+
+        try:
+            result = voice_pipeline.feed_external_audio(audio_np, sample_rate, wake_override=True)
+        except Exception as exc:
+            logger.exception("[voice] /voice processing error: %s", exc)
+            return jsonify({"success": False, "reason": "internal_error"}), 500
+
+        elapsed = time.monotonic() - t_req
+        logger.info(
+            "[voice] /voice result: success=%s reason=%s text=%r total=%.2fs",
+            result.get("success"), result.get("reason"), result.get("text", "")[:60], elapsed,
+        )
+
+        status = 200 if result.get("success") else 422 if result.get("reason") in ("no_speech",) else 400
+        return jsonify({**result, "processing_time": round(elapsed, 2)}), status
+
     return app
 
 
@@ -208,6 +314,7 @@ if __name__ == "__main__":
         session_id="standalone_test",
         academic_context=None,
         settings=None,
+        voice_pipeline=None,
     )
 
     print(f"[mobile] Standalone server running on http://{args.host}:{args.port}")
