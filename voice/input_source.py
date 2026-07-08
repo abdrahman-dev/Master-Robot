@@ -60,8 +60,7 @@ class MobileMicrophoneInput(VoiceInputSource):
     def stop(self) -> None:
         self._running = False
 
-    def feed_audio(self, audio: np.ndarray, sample_rate: int,
-                   wake_override: bool = True) -> dict:
+    def feed_audio(self, audio: np.ndarray, sample_rate: int) -> dict:
         if self._pipeline is None:
             return {"success": False, "reason": "pipeline_not_attached"}
-        return self._pipeline.feed_external_audio(audio, sample_rate, wake_override)
+        return self._pipeline.enqueue_mobile_audio(audio, sample_rate)

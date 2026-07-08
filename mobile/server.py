@@ -242,7 +242,12 @@ def create_mobile_server(
 
     @app.route("/voice", methods=["POST"])
     def handle_voice():
-        """Receive microphone audio from the mobile app and process through the full pipeline."""
+        """Receive microphone audio from the mobile app and enqueue for the voice pipeline.
+
+        Runs resample + VAD synchronously, then enqueues for the worker thread
+        which handles the full processing chain (SegmentEnhancer → ASR → wake word
+        → LLM → TTS → face animation).  Returns immediately with the VAD result.
+        """
         t_req = time.monotonic()
         client_ip = request.remote_addr or "unknown"
 
@@ -270,24 +275,25 @@ def create_mobile_server(
         duration = len(audio_np) / float(sample_rate)
         ext = (file_storage.filename or "").rsplit(".", 1)[-1] if "." in (file_storage.filename or "") else "unknown"
         logger.info(
-            "[voice] /voice from %s | fmt=%s size=%d samples sr=%d duration=%.2fs",
+            "[voice] /voice from %s | fmt=%s size=%d sr=%d duration=%.2fs",
             client_ip, ext, len(audio_np), sample_rate, duration,
         )
 
-        try:
-            result = voice_pipeline.feed_external_audio(audio_np, sample_rate, wake_override=True)
-        except Exception as exc:
-            logger.exception("[voice] /voice processing error: %s", exc)
-            return jsonify({"success": False, "reason": "internal_error"}), 500
+        # Preprocess + VAD + enqueue — non-blocking for Flask
+        result = voice_pipeline.enqueue_mobile_audio(audio_np, sample_rate)
 
         elapsed = time.monotonic() - t_req
         logger.info(
-            "[voice] /voice result: success=%s reason=%s text=%r total=%.2fs",
-            result.get("success"), result.get("reason"), result.get("text", "")[:60], elapsed,
+            "[voice] /voice result: success=%s reason=%s total=%.2fs",
+            result.get("success"), result.get("reason"), elapsed,
         )
 
-        status = 200 if result.get("success") else 422 if result.get("reason") in ("no_speech",) else 400
-        return jsonify({**result, "processing_time": round(elapsed, 2)}), status
+        if result.get("success"):
+            return jsonify({"success": True, "processing_time": round(elapsed, 2)})
+        else:
+            reason = result.get("reason", "unknown")
+            status = 422 if reason in ("no_speech", "empty_audio") else 400
+            return jsonify({"success": False, "reason": reason}), status
 
     return app
 
