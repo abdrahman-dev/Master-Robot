@@ -28,8 +28,11 @@ def preload():
     """Preload the ASR model synchronously to eliminate first-utterance latency.
     
     Call once during pipeline startup, before any audio is processed.
-    This is a no-op if the model is already loaded.
+    This is a no-op if the model is already loaded or if the provider is not Whisper.
     """
+    if _ASR.provider != "whisper":
+        logger.info("[ASR] Skipping preload (provider=%s)", _ASR.provider)
+        return
     logger.info("[ASR] Preloading model...")
     _get_whisper_model()
 
