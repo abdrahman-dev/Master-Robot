@@ -172,7 +172,7 @@ class VoicePipeline:
         self._turn_lock = threading.Lock()
 
         self._running = False
-        self._segment_queue: queue.Queue = queue.Queue(maxsize=3)
+        self._segment_queue: queue.Queue = queue.Queue(maxsize=8)
         self._worker_thread: Optional[threading.Thread] = None
         self._stream_thread: Optional[threading.Thread] = None
 
@@ -205,15 +205,10 @@ class VoicePipeline:
     def _enqueue_segment(self, segment: Segment) -> None:
         self._total_segments += 1
         try:
-            self._segment_queue.put(segment, block=False)
+            self._segment_queue.put(segment, timeout=0.5)
         except queue.Full:
             self._dropped_segments += 1
-            logger.warning("[queue] Full, dropping oldest (dropped=%d)", self._dropped_segments)
-            try:
-                self._segment_queue.get_nowait()
-                self._segment_queue.put(segment, block=False)
-            except queue.Empty:
-                pass
+            logger.warning("[queue] Full after 0.5s timeout, dropping segment (dropped=%d)", self._dropped_segments)
 
     def _worker_loop(self) -> None:
         logger.info("[worker] Segment processing worker started")
@@ -230,8 +225,8 @@ class VoicePipeline:
         logger.info("[worker] Segment processing worker stopped")
 
     def _process_segment(self, segment: Segment) -> None:
-        if segment.turn_id != self._get_latest_turn_id():
-            logger.debug("[worker] Stale turn %d, skipping", segment.turn_id)
+        if segment.turn_id < self._get_latest_turn_id() - 1:
+            logger.debug("[worker] Stale turn %d (latest=%d), skipping", segment.turn_id, self._get_latest_turn_id())
             return
 
         try:
@@ -248,12 +243,12 @@ class VoicePipeline:
 
             if not text:
                 if self._face_set_state:
-                    self._face_set_state("IDLE")
+                    self._face_set_state("LISTENING" if self._wake_word_active else "IDLE")
                 return
 
-            if segment.turn_id != self._get_latest_turn_id():
+            if segment.turn_id < self._get_latest_turn_id() - 1:
                 if self._face_set_state:
-                    self._face_set_state("IDLE")
+                    self._face_set_state("LISTENING" if self._wake_word_active else "IDLE")
                 return
 
             if self._tts.is_playing():
@@ -330,9 +325,9 @@ class VoicePipeline:
             llm_time = time.monotonic() - t0
             logger.info("[LLM] response_time=%.2fs", llm_time)
 
-            if segment.turn_id != self._get_latest_turn_id():
+            if segment.turn_id < self._get_latest_turn_id() - 1:
                 if self._face_set_state:
-                    self._face_set_state("IDLE")
+                    self._face_set_state("LISTENING" if self._wake_word_active else "IDLE")
                 return
 
             if detected_lang:
@@ -393,7 +388,8 @@ class VoicePipeline:
         if device_chunk_size <= 0:
             device_chunk_size = 1024
 
-        self._resample_buffer = np.array([], dtype=np.float32)
+        self._resample_parts: List[np.ndarray] = []
+        self._resample_total = 0
 
         if needs_resample:
             import math
@@ -428,11 +424,19 @@ class VoicePipeline:
                 if needs_resample:
                     raw_chunk = _resample_chunk(raw_chunk, device_sample_rate, self._sample_rate)
 
-                self._resample_buffer = np.concatenate([self._resample_buffer, raw_chunk])
+                self._resample_parts.append(raw_chunk)
+                self._resample_total += len(raw_chunk)
 
-                while len(self._resample_buffer) >= self._chunk_size:
-                    chunk_16k = self._resample_buffer[:self._chunk_size]
-                    self._resample_buffer = self._resample_buffer[self._chunk_size:]
+                while self._resample_total >= self._chunk_size:
+                    # Flatten accumulated parts into one contiguous array
+                    if len(self._resample_parts) == 1:
+                        big = self._resample_parts[0]
+                    else:
+                        big = np.concatenate(self._resample_parts, dtype=np.float32)
+                    chunk_16k = big[:self._chunk_size]
+                    leftover = big[self._chunk_size:]
+                    self._resample_parts = [leftover] if len(leftover) > 0 else []
+                    self._resample_total = len(leftover)
 
                     # Gentle AGC: only boost quiet audio, never reduce normal/loud audio
                     rms = np.sqrt(np.mean(chunk_16k ** 2))
@@ -446,9 +450,9 @@ class VoicePipeline:
                     chunk_bytes = float32_chunk_to_int16_bytes(chunk_16k)
 
                     rms = float(np.sqrt(np.mean(chunk_16k ** 2)))
-                    if rms < 0.005:
+                    if segment_chunks is None and rms < 0.005:
                         pre_buffer.append(chunk_bytes)
-                        return
+                        continue
 
                     speech_now = vad.is_speech(chunk_16k)
 
@@ -474,7 +478,12 @@ class VoicePipeline:
                         silence_chunks = 0
                     else:
                         silence_chunks += 1
-                    if (silence_chunks >= self._silence_timeout_chunks
+                    adaptive_silence = self._silence_timeout_chunks
+                    if speech_chunks >= self._min_speech_chunks * 4:
+                        extra = speech_chunks // 4
+                        adaptive_silence = max(self._silence_timeout_chunks, extra)
+                        adaptive_silence = min(adaptive_silence, 75)
+                    if (silence_chunks >= adaptive_silence
                             and speech_chunks >= self._min_speech_chunks):
                         audio_chunks = list(segment_chunks)
                         finished_turn_id = current_turn_id
@@ -512,11 +521,15 @@ class VoicePipeline:
         except Exception as e:
             logger.exception("[voice] Stream error: %s", e)
         finally:
-            self._resample_buffer = np.array([], dtype=np.float32)
+            self._resample_parts = []
+            self._resample_total = 0
 
         logger.info("[voice] Audio stream closed")
 
     def start(self) -> None:
+        # Preload ASR + VAD models before starting audio, eliminating first-utterance latency
+        asr.preload()
+        vad.warmup()
         self._running = True
         self._worker_thread = threading.Thread(target=self._worker_loop, daemon=False)
         self._worker_thread.start()

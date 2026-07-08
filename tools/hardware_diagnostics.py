@@ -386,16 +386,15 @@ def full_hardware_test(mc: MotorController) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Serial connection report
+# TCP connection report
 # ---------------------------------------------------------------------------
 
 def print_serial_report(mc: MotorController) -> None:
-    """Display a summary of the serial connection state."""
+    """Display a summary of the ESP32 TCP connection state."""
     print("  ═════ Motor Controller ═════")
-    print(f"  Configured Port : {mc.requested_port}")
-    print(f"  Connected Port  : {mc.port if mc.is_available() else '—'}")
-    print(f"  Baudrate        : {mc._baudrate}")
-    print(f"  Auto Detection  : {'YES' if mc.auto_detected else 'NO'}")
+    print(f"  ESP32 IP        : {mc._esp32_ip}")
+    print(f"  ESP32 Port      : {mc._esp32_port}")
+    print(f"  Connection      : {mc.requested_port if mc.is_available() else '—'}")
     print(f"  ESP32 Status    : {'Connected' if mc.is_available() else 'Disconnected'}")
     print()
 

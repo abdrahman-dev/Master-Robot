@@ -218,13 +218,10 @@ class ServoSettings:
 
 @dataclass(frozen=True)
 class MotorSettings:
-    serial_port: str = os.getenv("ROBOT_MOTOR_PORT",
-        "COM3" if not IS_RASPBERRY_PI else "/dev/serial0")
-    baudrate: int = int(os.getenv("ROBOT_MOTOR_BAUDRATE", "115200"))
-    serial_timeout_sec: float = 1.0
+    esp32_ip: str = os.getenv("ROBOT_ESP32_IP", "192.168.149.254")
+    esp32_port: int = int(os.getenv("ROBOT_ESP32_PORT", "3333"))
+    tcp_timeout_sec: float = 1.0
     default_speed: int = 150
-    auto_detect: bool = os.getenv("ROBOT_MOTOR_AUTO_DETECT", "true").lower() in ("1", "true", "yes")
-    verify_timeout_sec: float = float(os.getenv("ROBOT_MOTOR_VERIFY_TIMEOUT_SEC", "2.0"))
 
 
 @dataclass(frozen=True)

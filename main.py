@@ -93,10 +93,9 @@ def main() -> None:
 
     vision_pipeline = VisionPipeline()
 
-    motor_port = os.getenv("ROBOT_MOTOR_PORT", "COM3" if sys.platform == "win32" else "/dev/serial0")
-    motor = MotorController(port=motor_port)
+    motor = MotorController()
     if motor.is_available():
-        logger.info("[main] Motor controller connected on %s", motor_port)
+        logger.info("[main] Motor controller connected to %s", motor.requested_port)
     else:
         logger.warning("[main] Motor controller not available — running without motors")
 

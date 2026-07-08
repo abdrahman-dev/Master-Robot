@@ -41,6 +41,21 @@ def get_threshold() -> float:
     return _THRESHOLD
 
 
+def warmup():
+    """Preload and warm up the Silero VAD model with a dummy inference.
+    
+    Call once during pipeline startup to eliminate first-call JIT overhead
+    on the critical audio callback path.
+    """
+    model = _load_model_once()
+    dummy = np.zeros(TARGET_SAMPLE_RATE // 1000 * 32, dtype=np.float32)
+    try:
+        is_speech(dummy)
+        logger.info("[VAD] Model warmed up")
+    except Exception as e:
+        logger.warning("[VAD] Warmup inference failed (non-fatal): %s", e)
+
+
 def _is_valid_local_model_path(path: str) -> bool:
     if not path:
         return False

@@ -24,6 +24,16 @@ class ASRModuleError(RuntimeError):
     pass
 
 
+def preload():
+    """Preload the ASR model synchronously to eliminate first-utterance latency.
+    
+    Call once during pipeline startup, before any audio is processed.
+    This is a no-op if the model is already loaded.
+    """
+    logger.info("[ASR] Preloading model...")
+    _get_whisper_model()
+
+
 def _get_whisper_model():
     global _whisper_model
     if _whisper_model is not None:

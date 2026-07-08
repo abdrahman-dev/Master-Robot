@@ -1,5 +1,5 @@
 """
-Battery monitor — reads voltage from ESP32 via serial, triggers Pi shutdown at low voltage.
+Battery monitor — reads voltage from ESP32 via TCP, triggers Pi shutdown at low voltage.
 ESP32 sends lines like: BAT:8.12
 """
 from __future__ import annotations

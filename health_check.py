@@ -34,7 +34,6 @@ PIP_TO_MODULE = {
     "speechrecognition": "speech_recognition",
     "edge-tts": "edge_tts",
     "opencv-python": "cv2",
-    "pyserial": "serial",
     "arabic-reshaper": "arabic_reshaper",
     "python-bidi": "bidi",
 }
@@ -126,7 +125,6 @@ def main():
         ("ultralytics", "ultralytics"),
         ("torchvision", "torchvision"),
         ("pygame", "pygame"),
-        ("pyserial", "serial"),
         ("psutil", "psutil"),
         ("arabic-reshaper", "arabic_reshaper"),
         ("python-bidi", "bidi"),

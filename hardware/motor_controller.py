@@ -1,7 +1,8 @@
-import glob
+from __future__ import annotations
+
 import logging
 import os
-import sys
+import socket
 import time
 from dataclasses import dataclass
 from typing import Optional
@@ -21,53 +22,27 @@ class MotorController:
     POSE_IDLE = Pose()
 
     def __init__(self, port: str = "/dev/serial0", baudrate: int = 115200, timeout: float = 1.0):
-        self._requested_port = port
-        self._port = port
-        self._baudrate = baudrate
+        # TCP configuration read from environment
+        self._esp32_ip = os.getenv("ROBOT_ESP32_IP", "192.168.149.254")
+        self._esp32_port = int(os.getenv("ROBOT_ESP32_PORT", "3333"))
         self._timeout = timeout
-        self._serial: Optional[object] = None
-        self._available = False
+
+        # Backward-compat attributes (used by diagnostics tool)
+        self._requested_port = f"{self._esp32_ip}:{self._esp32_port}"
+        self._port = self._requested_port
+        self._baudrate = 0
         self._auto_detected = False
+
+        self._sock: Optional[socket.socket] = None
+        self._available = False
+        self._recv_buffer = ""
 
         self._current_speed: int = 180
         self._head_angle: int = 90
         self._right_arm_angle: int = 90
         self._left_arm_angle: int = 90
 
-        auto_detect = os.getenv("ROBOT_MOTOR_AUTO_DETECT", "true").lower() in ("1", "true", "yes")
-        verify_timeout = float(os.getenv("ROBOT_MOTOR_VERIFY_TIMEOUT_SEC", "2.0"))
-
-        try:
-            import serial as pyserial
-        except ImportError:
-            logger.warning("[motor] pyserial not installed — motor controller disabled")
-            return
-
-        # Step 1: Try the configured (requested) port
-        ser = self._try_open_port(pyserial, port)
-        if ser is not None:
-            self._serial = ser
-            self._available = True
-            logger.info("[motor] Connected on configured port %s at %d baud", port, baudrate)
-            return
-
-        if not auto_detect:
-            logger.warning(
-                "[motor] Configured port %s unavailable and auto-detection disabled — "
-                "motor controller disabled", port
-            )
-            return
-
-        # Step 2: Auto-detection
-        logger.info("[motor] Configured port %s unavailable — starting auto-detection", port)
-        detected = self._auto_detect(pyserial, verify_timeout)
-        if detected is not None:
-            self._serial = detected
-            self._auto_detected = True
-            self._available = True
-            logger.info("[motor] Auto-detected ESP32 on %s at %d baud", self._port, baudrate)
-        else:
-            logger.warning("[motor] No valid serial device found — motor controller disabled")
+        self._connect()
 
     # ── public API: properties ────────────────────────────────
 
@@ -76,114 +51,65 @@ class MotorController:
 
     @property
     def port(self) -> str:
-        """The port currently connected to (may differ from requested_port if auto-detected)."""
         return self._port
 
     @property
     def requested_port(self) -> str:
-        """The port that was originally requested / configured via .env."""
         return self._requested_port
 
     @property
     def auto_detected(self) -> bool:
-        """True if the port was found via auto-detection rather than the configured value."""
         return self._auto_detected
 
-    # ── internal helpers ──────────────────────────────────────
+    # ── internal helpers: TCP transport ───────────────────────
 
-    def _try_open_port(self, pyserial_module, port: str) -> Optional[object]:
-        """Attempt to open *port* and return the Serial object, or None on failure."""
+    def _connect(self) -> bool:
         try:
-            ser = pyserial_module.Serial(
-                port=port, baudrate=self._baudrate, timeout=self._timeout
+            sock = socket.create_connection(
+                (self._esp32_ip, self._esp32_port),
+                timeout=self._timeout,
             )
-            logger.debug("[motor] Opened %s", port)
-            return ser
-        except Exception as e:
-            logger.debug("[motor] Could not open %s: %s", port, e)
-            return None
+            sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+            sock.settimeout(0.0)
+            self._sock = sock
+            self._available = True
+            logger.info(
+                "[motor] Connected to ESP32 at %s:%d",
+                self._esp32_ip, self._esp32_port,
+            )
+            return True
+        except (OSError, socket.gaierror) as e:
+            logger.warning("[motor] Could not connect to %s:%d — %s", self._esp32_ip, self._esp32_port, e)
+            self._sock = None
+            self._available = False
+            return False
 
-    def _get_candidate_ports(self) -> list[str]:
-        """Return a list of serial-port paths to try during auto-detection."""
-        candidates: list[str] = []
-
-        if sys.platform == "win32":
+    def _handle_disconnect(self):
+        if self._sock is not None:
             try:
-                import serial.tools.list_ports as lp
-                candidates = [p.device for p in lp.comports()]
-            except Exception:
-                logger.debug("[motor] serial.tools.list_ports not available")
-        else:
-            patterns = [
-                "/dev/serial0",
-                "/dev/serial1",
-                "/dev/ttyAMA*",
-                "/dev/ttyS*",
-                "/dev/ttyUSB*",
-                "/dev/ttyACM*",
-            ]
-            for pattern in patterns:
-                candidates.extend(glob.glob(pattern))
-            # Deduplicate while preserving insertion order
-            seen: set[str] = set()
-            candidates = [p for p in candidates if not (p in seen or seen.add(p))]
-
-        # Remove the already-tried configured port so we don't retry it
-        return [p for p in candidates if p != self._requested_port]
-
-    def _verify_esp32(self, ser, timeout_sec: float) -> bool:
-        """
-        Wait up to *timeout_sec* seconds for a valid ESP32 response.
-        Returns True if either the startup banner or a battery packet is seen.
-        """
-        start = time.monotonic()
-        buf = ""
-        while time.monotonic() - start < timeout_sec:
-            try:
-                if ser.in_waiting > 0:
-                    raw = ser.read(ser.in_waiting)
-                    buf += raw.decode("utf-8", errors="replace")
-                    lines = buf.split("\n")
-                    for line in lines[:-1]:
-                        line = line.strip()
-                        if "ROPE Motor Controller Ready" in line or line.startswith("BAT:"):
-                            logger.debug("[motor] Verified ESP32 on %s", ser.port)
-                            return True
-                    buf = lines[-1]
+                self._sock.close()
             except Exception:
                 pass
-            time.sleep(0.05)
-        return False
-
-    def _auto_detect(self, pyserial_module, verify_timeout: float) -> Optional[object]:
-        """Scan candidate serial ports and return an open, verified Serial object, or None."""
-        for port in self._get_candidate_ports():
-            ser = self._try_open_port(pyserial_module, port)
-            if ser is None:
-                continue
-            if self._verify_esp32(ser, verify_timeout):
-                self._port = port
-                return ser
-            # Verification failed — close and try the next one
-            try:
-                ser.close()
-            except Exception:
-                pass
-        return None
+            self._sock = None
+        self._available = False
+        self._recv_buffer = ""
 
     # ── internal helpers: commands ────────────────────────────
 
     def _send(self, command: str) -> bool:
-        if not self._available or self._serial is None:
+        if not self._available:
+            self._connect()
+        if not self._available or self._sock is None:
             return False
         try:
             payload = (command + "\n").encode("utf-8")
-            self._serial.write(payload)
+            self._sock.sendall(payload)
             logger.debug("[motor] Sent: %s", command)
             time.sleep(0.05)
             return True
-        except Exception as e:
+        except (OSError, socket.timeout) as e:
             logger.warning("[motor] Send failed: %s", e)
+            self._handle_disconnect()
             return False
 
     def _send_motion(self, command: str, duration_ms: int = 0) -> bool:
@@ -279,18 +205,26 @@ class MotorController:
         if left_arm is not None:
             self.move_arm_left(left_arm)
 
-    # ── serial I/O ────────────────────────────────────────────
+    # ── TCP I/O ────────────────────────────────────────────────
 
     def read_line(self) -> Optional[str]:
-        """Read one line from ESP32 if available. Returns None if nothing available."""
-        if not self._available or self._serial is None:
+        if not self._available or self._sock is None:
             return None
         try:
-            if self._serial.in_waiting > 0:
-                line = self._serial.readline().decode("utf-8", errors="replace").strip()
+            data = self._sock.recv(4096)
+            if not data:
+                self._handle_disconnect()
+                return None
+            self._recv_buffer += data.decode("utf-8", errors="replace")
+            if "\n" in self._recv_buffer:
+                line, self._recv_buffer = self._recv_buffer.split("\n", 1)
+                line = line.strip()
                 return line if line else None
-        except Exception as e:
+        except (BlockingIOError, socket.timeout):
+            pass
+        except (OSError, ConnectionError) as e:
             logger.warning("[motor] Read failed: %s", e)
+            self._handle_disconnect()
         return None
 
     # ── lifecycle ─────────────────────────────────────────────
@@ -299,10 +233,11 @@ class MotorController:
         self.stop()
         self.center_servos()
         time.sleep(0.15)
-        if self._serial is not None and self._serial.is_open:
+        if self._sock is not None:
             try:
-                self._serial.close()
-                logger.info("[motor] Serial port closed")
+                self._sock.close()
+                logger.info("[motor] TCP socket closed")
             except Exception as e:
-                logger.warning("[motor] Error closing serial: %s", e)
+                logger.warning("[motor] Error closing socket: %s", e)
+            self._sock = None
         self._available = False
