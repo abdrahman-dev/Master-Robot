@@ -160,6 +160,7 @@ def main() -> None:
         academic_context=academic_context,
         settings=_SETTINGS,
         mic_enabled=_SETTINGS.general.mic_enabled,
+        face=face,
     )
     _mobile_thread = threading.Thread(
         target=lambda: mobile_app.run(host="0.0.0.0", port=5000, debug=False, use_reloader=False),

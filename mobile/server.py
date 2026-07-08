@@ -53,6 +53,7 @@ def create_mobile_server(
     academic_context,
     settings,
     mic_enabled: bool = True,
+    face=None,
 ):
     app = Flask(__name__)
     CORS(app)
@@ -110,6 +111,8 @@ def create_mobile_server(
                 text = params.get("text", "")
                 language = params.get("language", "ar")
                 if tts and text:
+                    if face:
+                        face.set_spoken_text(text)
                     tts.speak(text, language)
                     return jsonify({"message": "تم نطق النص بنجاح", "success": True})
                 return jsonify({"message": "النص فارغ", "success": False})
@@ -163,6 +166,10 @@ def create_mobile_server(
                             user_message=question,
                             academic_context=ctx_str,
                         )
+                        if tts:
+                            if face:
+                                face.set_spoken_text(response)
+                            tts.speak(response, language)
                         return jsonify({"answer": response, "success": True})
                     return jsonify({"message": "الوضع الأكاديمي غير نشط", "success": False})
                 return jsonify({"message": "وضع أكاديمي غير معروف", "success": False})
