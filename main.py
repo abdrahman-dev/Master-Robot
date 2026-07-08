@@ -126,14 +126,14 @@ def main() -> None:
     if _SETTINGS.academic.mode:
         academic_context = AcademicContext()
 
-        def on_tts_text(text: str) -> None:
-            face.set_spoken_text(text)
-        tts_module.set_text_callback(on_tts_text)
-
         app = create_academic_app(academic_context, llm, tts_module, face)
         run_academic_server(app, port=_SETTINGS.academic.api_port)
     else:
         academic_context = None
+
+    def on_tts_text(text: str) -> None:
+        face.set_spoken_text(text)
+    tts_module.set_text_callback(on_tts_text)
 
     voice_pipeline = VoicePipeline(
         llm=llm,
@@ -143,6 +143,7 @@ def main() -> None:
         motor_controller=motor,
         vision_context_getter=vision_pipeline.get_shared_context,
         academic_context=academic_context,
+        voice_input_source=_SETTINGS.general.voice_input_source,
     )
 
     if vision_pipeline.open():

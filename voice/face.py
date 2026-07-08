@@ -479,8 +479,12 @@ class FaceModule:
         import pygame
 
         # Initialize mixer first — works without display
-        pygame.mixer.pre_init(frequency=44100, size=-16, channels=2, buffer=2048)
-        pygame.mixer.init()
+        try:
+            if not pygame.mixer.get_init():
+                pygame.mixer.pre_init(frequency=44100, size=-16, channels=2, buffer=2048)
+                pygame.mixer.init()
+        except pygame.error as e:
+            logger.warning("[face] Audio device unavailable: %s", e)
 
         # Then try display init separately
         try:

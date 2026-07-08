@@ -79,16 +79,27 @@ class FaceIdentityTracker:
         self._frame_counter = 0
 
         self._conf_threshold = 0.35
+        self._model_failed = False
 
         proto, weights = _ensure_models()
-        self._net = cv2.dnn.readNetFromCaffe(proto, weights)
-        logger.info("FaceIdentityTracker (OpenCV DNN) ready.")
+        try:
+            self._net = cv2.dnn.readNetFromCaffe(proto, weights)
+            if self._net.empty():
+                raise RuntimeError("Model is empty")
+            logger.info("FaceIdentityTracker (OpenCV DNN) ready.")
+        except Exception as e:
+            logger.error("[face] Failed to load face detection model: %s", e)
+            logger.error("[face] Download it with: wget -O models/res10_300x300_ssd_iter_140000.caffemodel https://github.com/opencv/opencv_3rdparty/raw/dnn_samples_face_detector_20170830/res10_300x300_ssd_iter_140000.caffemodel")
+            self._model_failed = True
+            self._net = None
 
         self._known_embeddings: List[np.ndarray] = []
         self._known_ids: List[str] = []
         self._net_error_logged = False
 
     def process_frame(self, frame: np.ndarray) -> List[Dict]:
+        if self._model_failed:
+            return []
         if frame is None:
             return []
 
@@ -114,11 +125,9 @@ class FaceIdentityTracker:
         self._net.setInput(blob)
         try:
             detections = self._net.forward()
-        except cv2.error as e:
-            if not self._net_error_logged:
-                logger.error("[face] OpenCV DNN forward() failed — model may be corrupted: %s", e)
-                logger.error("[face] Face detection disabled. Re-download models/res10_300x300_ssd_iter_140000.caffemodel")
-                self._net_error_logged = True
+        except cv2.error:
+            self._model_failed = True
+            logger.error("[face] Model inference failed — face detection permanently disabled for this session")
             return []
 
         results = []

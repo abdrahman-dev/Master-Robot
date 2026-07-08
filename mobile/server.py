@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+
 import io
 import logging
 import os
@@ -34,9 +35,9 @@ def _decode_audio(file_storage) -> tuple:
         raw /= (1 << (8 * audio_seg.sample_width - 1))
         return raw, sr
     except ImportError:
-        logger.debug("[voice] pydub not available, trying stdlib wave")
+        logger.debug("[MOBILE] pydub not available, trying stdlib wave")
     except Exception as exc:
-        logger.warning("[voice] pydub decode failed: %s", exc)
+        logger.warning("[MOBILE] pydub decode failed: %s", exc)
 
     if ext == "wav":
         try:
@@ -53,7 +54,7 @@ def _decode_audio(file_storage) -> tuple:
                 raw = raw.reshape(-1, nchannels).mean(axis=1)
             return raw, sr
         except Exception as exc:
-            logger.warning("[voice] wave decode failed: %s", exc)
+            logger.warning("[MOBILE] wave decode failed: %s", exc)
             return None, None
 
     if ext == "pcm":
@@ -62,10 +63,10 @@ def _decode_audio(file_storage) -> tuple:
             raw /= 32768.0
             return raw, 16000
         except Exception as exc:
-            logger.warning("[voice] PCM decode failed: %s", exc)
+            logger.warning("[MOBILE] PCM decode failed: %s", exc)
             return None, None
 
-    logger.warning("[voice] Unsupported format: %r (install pydub for wider support)", ext)
+    logger.warning("[MOBILE] Unsupported format: %r (install pydub for wider support)", ext)
     return None, None
 
 
@@ -252,11 +253,16 @@ def create_mobile_server(
         client_ip = request.remote_addr or "unknown"
 
         if voice_pipeline is None:
-            logger.warning("[voice] /voice called but pipeline not available")
+            logger.warning("[MOBILE] /voice called but pipeline not available")
             return jsonify({"success": False, "reason": "pipeline_unavailable"}), 503
 
+        voice_source = settings.general.voice_input_source if settings else "both"
+        if voice_source == "usb":
+            logger.info("[MOBILE] Voice input source is 'usb', ignoring mobile upload")
+            return jsonify({"success": False, "reason": "source_not_mobile"}), 503
+
         if "audio" not in request.files:
-            logger.warning("[voice] /voice from %s: no audio field", client_ip)
+            logger.warning("[MOBILE] /voice from %s: no audio field", client_ip)
             return jsonify({"success": False, "reason": "missing_audio"}), 400
 
         file_storage = request.files["audio"]
@@ -265,17 +271,17 @@ def create_mobile_server(
 
         audio_np, sample_rate = _decode_audio(file_storage)
         if audio_np is None or sample_rate is None:
-            logger.warning("[voice] /voice from %s: decode failed", client_ip)
+            logger.warning("[MOBILE] /voice from %s: decode failed", client_ip)
             return jsonify({"success": False, "reason": "decode_failed"}), 415
 
         if len(audio_np) == 0:
-            logger.warning("[voice] /voice from %s: empty audio", client_ip)
+            logger.warning("[MOBILE] /voice from %s: empty audio", client_ip)
             return jsonify({"success": False, "reason": "empty_audio"}), 422
 
         duration = len(audio_np) / float(sample_rate)
         ext = (file_storage.filename or "").rsplit(".", 1)[-1] if "." in (file_storage.filename or "") else "unknown"
         logger.info(
-            "[voice] /voice from %s | fmt=%s size=%d sr=%d duration=%.2fs",
+            "[MOBILE] /voice from %s | fmt=%s size=%d sr=%d duration=%.2fs",
             client_ip, ext, len(audio_np), sample_rate, duration,
         )
 
@@ -284,7 +290,7 @@ def create_mobile_server(
 
         elapsed = time.monotonic() - t_req
         logger.info(
-            "[voice] /voice result: success=%s reason=%s total=%.2fs",
+            "[MOBILE] /voice result: success=%s reason=%s total=%.2fs",
             result.get("success"), result.get("reason"), elapsed,
         )
 

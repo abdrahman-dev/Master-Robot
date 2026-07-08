@@ -104,6 +104,7 @@ class Segment:
     turn_id: int
     audio_chunks: List[bytes]
     mobile_source: bool = False
+    
 
 
 class VoicePipeline:
@@ -116,8 +117,10 @@ class VoicePipeline:
         motor_controller=None,
         vision_context_getter=None,
         academic_context=None,
+        voice_input_source: str = "both",
     ):
         self._mic_available = True
+        self._voice_input_source = voice_input_source
 
         if _SETTINGS.vad.sample_rate != _SETTINGS.asr.sample_rate:
             raise RuntimeError(
@@ -218,14 +221,16 @@ class VoicePipeline:
 
     def _process_segment(self, segment: Segment) -> None:
         if segment.turn_id < self._get_latest_turn_id() - 1:
-            logger.debug("[worker] Stale turn %d (latest=%d), skipping", segment.turn_id, self._get_latest_turn_id())
+            logger.debug("%s [worker] Stale turn %d (latest=%d), skipping", src, segment.turn_id, self._get_latest_turn_id())
             return
 
         if segment.mobile_source:
             self._wake_word_active = True
 
+        src = "[MOBILE]" if segment.mobile_source else "[USB]"
+
         try:
-            logger.info("[ASR] Transcribing speech segment...")
+            logger.info("%s [ASR] Transcribing speech segment...", src)
             audio_bytes = b"".join(segment.audio_chunks)
 
             audio_np = np.frombuffer(audio_bytes, dtype=np.int16).astype(np.float32) / 32768.0
@@ -235,7 +240,7 @@ class VoicePipeline:
             audio_bytes = (audio_np * 32767.0).astype(np.int16).tobytes()
 
             logger.info(
-                "[diag] segment_len=%.2fs agc_gain=%.2f peak_db=%.1f",
+                "%s [diag] segment_len=%.2fs agc_gain=%.2f peak_db=%.1f", src,
                 len(audio_np) / self._sample_rate,
                 self._segment_enhancer.last_agc_gain,
                 self._segment_enhancer.last_peak_db,
@@ -248,7 +253,7 @@ class VoicePipeline:
                 language="ar",  # Fixed to Arabic — change to _SETTINGS.asr.language_mode for auto-detect
             )
             asr_time = time.monotonic() - t0
-            logger.info("[ASR] result=%r lang=%r time=%.2fs", text, detected_lang, asr_time)
+            logger.info("%s [ASR] result=%r lang=%r time=%.2fs", src, text, detected_lang, asr_time)
 
             if not text:
                 if self._face_set_state:
@@ -262,14 +267,14 @@ class VoicePipeline:
 
             if self._tts.is_playing():
                 if _is_wake_word(text):
-                    logger.info("[voice] Wake word during TTS, interrupting")
+                    logger.info("%s [voice] Wake word during TTS, interrupting", src)
                     self._tts.stop_playback()
                 else:
-                    logger.info("[voice] Non-wake-word during TTS, ignoring")
+                    logger.info("%s [voice] Non-wake-word during TTS, ignoring", src)
                     return
 
             if _is_wake_word(text):
-                logger.info("[voice] Wake word detected")
+                logger.info("%s [voice] Wake word detected", src)
                 if self._face_set_state:
                     self._face_set_state("LISTENING")
                 self._wake_word_active = True
@@ -290,7 +295,7 @@ class VoicePipeline:
             if cmd is not None and self._motor is not None and self._motor.is_available():
                 method_name, duration_ms = cmd
                 getattr(self._motor, method_name)(duration_ms)
-                logger.info("[voice] Motor command: %s(%s)", method_name, duration_ms)
+                logger.info("%s [voice] Motor command: %s(%s)", src, method_name, duration_ms)
 
             if self._face_set_state:
                 self._face_set_state("THINKING")
@@ -328,11 +333,11 @@ class VoicePipeline:
                     academic_context=academic_ctx,
                 )
             except LLMModuleError:
-                logger.warning("[LLM] OpenRouter unavailable, using fallback")
+                logger.warning("%s [LLM] OpenRouter unavailable, using fallback", src)
                 lang = detected_lang if detected_lang in ("ar", "en") else "en"
                 response = random.choice(FALLBACK_MESSAGES[lang])
             llm_time = time.monotonic() - t0
-            logger.info("[LLM] response_time=%.2fs", llm_time)
+            logger.info("%s [LLM] response_time=%.2fs", src, llm_time)
 
             if segment.turn_id < self._get_latest_turn_id() - 1:
                 if self._face_set_state:
@@ -340,22 +345,22 @@ class VoicePipeline:
                 return
 
             if detected_lang:
-                logger.info("[TTS] Starting playback (lang=%s)", detected_lang)
+                logger.info("%s [TTS] Starting playback (lang=%s)", src, detected_lang)
                 self._tts.stop()
                 self._tts.speak(response, language=detected_lang)
             else:
-                logger.warning("[TTS] No detected language, skipping playback")
+                logger.warning("%s [TTS] No detected language, skipping playback", src)
                 if self._face_set_state:
                     self._face_set_state("IDLE")
 
             self._wake_word_active = False
 
         except (asr.ASRModuleError, tts.TTSModuleError) as exc:
-            logger.exception("[worker] Processing failed: %s", exc)
+            logger.exception("%s [worker] Processing failed: %s", src, exc)
             if self._face_set_state:
                 self._face_set_state("IDLE")
         except Exception as exc:
-            logger.exception("[worker] Unexpected error: %s", exc)
+            logger.exception("%s [worker] Unexpected error: %s", src, exc)
             if self._face_set_state:
                 self._face_set_state("IDLE")
 
@@ -385,7 +390,7 @@ class VoicePipeline:
 
             # 3. VAD — reject silence early
             if not vad.is_speech(audio):
-                logger.info("[voice] Mobile audio rejected by VAD")
+                logger.info("[MOBILE] Mobile audio rejected by VAD")
                 return {"success": False, "reason": "no_speech"}
 
             # 4. Convert to int16 bytes and enqueue
@@ -397,12 +402,12 @@ class VoicePipeline:
                 mobile_source=True,
             )
             self._enqueue_segment(segment)
-            logger.info("[voice] Mobile audio enqueued (turn=%d, len=%.2fs)",
+            logger.info("[MOBILE] Mobile audio enqueued (turn=%d, len=%.2fs)",
                         turn_id, len(audio) / max(self._sample_rate, 1))
             return {"success": True}
 
         except Exception as exc:
-            logger.exception("[voice] Enqueue mobile audio failed: %s", exc)
+            logger.exception("[MOBILE] Enqueue mobile audio failed: %s", exc)
             return {"success": False, "reason": "internal_error"}
 
     def run_forever(self) -> None:
@@ -416,16 +421,19 @@ class VoicePipeline:
             root.setLevel(logging.INFO)
 
         if not _SETTINGS.general.mic_enabled:
-            logger.info("[voice] Microphone disabled via ROBOT_MIC_ENABLED=false")
+            logger.info("[USB] Microphone disabled via ROBOT_MIC_ENABLED=false")
+            return
+        if self._voice_input_source == "mobile":
+            logger.info("[USB] Voice input source is 'mobile', not starting USB microphone")
             return
         if not self._mic_available:
-            logger.warning("[voice] Microphone unavailable, audio pipeline disabled")
+            logger.warning("[USB] Microphone unavailable, audio pipeline disabled")
             return
 
         try:
             import sounddevice as sd
         except Exception as exc:
-            logger.error("[voice] sounddevice import failed: %s", exc)
+            logger.error("[USB] sounddevice import failed: %s", exc)
             self._mic_available = False
             return
 
@@ -433,7 +441,7 @@ class VoicePipeline:
 
         device_index = ad.get_sounddevice_index()
         if device_index is None:
-            logger.warning("[voice] No audio device found, disabling microphone")
+            logger.warning("[USB] No audio device found, disabling microphone")
             self._mic_available = False
             return
 
@@ -441,11 +449,11 @@ class VoicePipeline:
         try:
             device_sample_rate = ad.get_device_sample_rate(device_index) or self._sample_rate
             logger.info(
-                "[voice] Device %d samplerate: %d Hz (target: %d Hz)",
+                "[USB] Device %d samplerate: %d Hz (target: %d Hz)",
                 device_index, device_sample_rate, self._sample_rate,
             )
         except Exception as exc:
-            logger.warning("[voice] Could not query device samplerate: %s, using %d Hz", exc, self._sample_rate)
+            logger.warning("[USB] Could not query device samplerate: %s, using %d Hz", exc, self._sample_rate)
 
         needs_resample = device_sample_rate != self._sample_rate
         device_chunk_size = int(device_sample_rate * _SETTINGS.vad.chunk_duration_ms / 1000)
@@ -460,7 +468,7 @@ class VoicePipeline:
             gcd = math.gcd(device_sample_rate, self._sample_rate)
             up, down = self._sample_rate // gcd, device_sample_rate // gcd
             logger.info(
-                "[voice] Resampling: %d Hz -> %d Hz (ratio=%d/%d)",
+                "[USB] Resampling: %d Hz -> %d Hz (ratio=%d/%d)",
                 device_sample_rate, self._sample_rate, up, down,
             )
 
@@ -481,7 +489,7 @@ class VoicePipeline:
                 if not self._running:
                     return
                 if status:
-                    logger.debug("[voice] Audio stream status: %s", status)
+                    logger.debug("[USB] Audio stream status: %s", status)
                 if indata is None or len(indata) == 0:
                     return
 
@@ -513,7 +521,7 @@ class VoicePipeline:
                             preprocessor.finalize_calibration()
                             calibrating = False
                             logger.info(
-                                "[voice] Calibration done: noise_floor=%.5f",
+                                "[USB] Calibration done: noise_floor=%.5f",
                                 preprocessor.noise_floor,
                             )
                         continue
@@ -583,11 +591,11 @@ class VoicePipeline:
                                     finished_turn_id, len(audio_chunks))
                         self._enqueue_segment(Segment(turn_id=finished_turn_id, audio_chunks=audio_chunks))
             except Exception as e:
-                logger.error("[voice] Audio callback error: %s", e, exc_info=True)
+                logger.error("[USB] Audio callback error: %s", e, exc_info=True)
 
         if self._face_set_state:
             self._face_set_state("IDLE")
-        logger.info("[voice] Listening...")
+        logger.info("[USB] Listening...")
 
         sd.stop()
         time.sleep(0.2)
@@ -604,16 +612,16 @@ class VoicePipeline:
                 while self._running:
                     time.sleep(0.5)
         except sd.PortAudioError as e:
-            logger.warning("[voice] No microphone available: %s", e)
+            logger.warning("[USB] No microphone available: %s", e)
             self._mic_available = False
         except Exception as e:
-            logger.exception("[voice] Stream error: %s", e)
+            logger.exception("[USB] Stream error: %s", e)
         finally:
             self._resample_parts = []
             self._resample_total = 0
             preprocessor.reset()
 
-        logger.info("[voice] Audio stream closed")
+        logger.info("[USB] Audio stream closed")
 
     def start(self) -> None:
         # Preload ASR + VAD models before starting audio, eliminating first-utterance latency

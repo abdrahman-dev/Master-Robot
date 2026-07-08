@@ -23,6 +23,7 @@ class GeneralSettings:
     fullscreen: bool = os.getenv("ROBOT_FULLSCREEN", "false").lower() in ("1", "true", "yes")
     dev_text_input: bool = os.getenv("ROBOT_DEV_TEXT_INPUT", "false").lower() in ("1", "true", "yes")
     mic_enabled: bool = os.getenv("ROBOT_MIC_ENABLED", "true").lower() in ("1", "true", "yes")
+    voice_input_source: str = os.getenv("ROBOT_VOICE_INPUT_SOURCE", "both")
 
 
 @dataclass(frozen=True)
