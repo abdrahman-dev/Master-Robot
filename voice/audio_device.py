@@ -2,6 +2,7 @@ import logging
 import os
 import re
 import subprocess
+import sys
 from typing import Optional
 
 logger = logging.getLogger(__name__)
@@ -133,3 +134,54 @@ def get_device_sample_rate(device_index: int) -> Optional[int]:
     except Exception as exc:
         logger.warning("Could not query sample rate for device %d: %s", device_index, exc)
         return None
+
+
+def get_alsa_playback_device() -> Optional[str]:
+    """Detect the best ALSA playback device for TTS audio output.
+
+    Uses ``aplay -l`` to enumerate playback devices, preferring USB
+    devices over HDMI or headphone jack.  On non-Linux platforms or
+    when ``aplay`` is unavailable it returns *None*, letting callers
+    fall back to the ALSA default.
+
+    Returns
+    -------
+    str or None
+        An ALSA device identifier (e.g. ``plughw:3,0``) or *None*.
+    """
+    override = AUDIO_DEVICE_OVERRIDE
+    if override:
+        logger.info("Using ROBOT_AUDIO_DEVICE override for playback: %s", override)
+        return override
+
+    if sys.platform != "linux":
+        return None
+
+    try:
+        result = subprocess.run(
+            ["aplay", "-l"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+    except (subprocess.SubprocessError, FileNotFoundError):
+        logger.warning("aplay not available — cannot auto-detect playback device")
+        return None
+
+    candidates: list[tuple[int, str]] = []
+    for line in result.stdout.splitlines():
+        lower = line.lower()
+        if "usb" in lower:
+            m = re.search(r"card\s+(\d+):", line)
+            if m:
+                card = int(m.group(1))
+                candidates.append((card, line.strip()))
+
+    if candidates:
+        card, desc = candidates[0]
+        device = f"plughw:{card},0"
+        logger.info("Selected USB playback device card %d — %s", card, desc)
+        return device
+
+    logger.info("No USB playback device found — will use ALSA default")
+    return None
