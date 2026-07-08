@@ -86,6 +86,7 @@ class FaceIdentityTracker:
 
         self._known_embeddings: List[np.ndarray] = []
         self._known_ids: List[str] = []
+        self._net_error_logged = False
 
     def process_frame(self, frame: np.ndarray) -> List[Dict]:
         if frame is None:
@@ -111,7 +112,14 @@ class FaceIdentityTracker:
             mean=(104.0, 177.0, 123.0),
         )
         self._net.setInput(blob)
-        detections = self._net.forward()
+        try:
+            detections = self._net.forward()
+        except cv2.error as e:
+            if not self._net_error_logged:
+                logger.error("[face] OpenCV DNN forward() failed — model may be corrupted: %s", e)
+                logger.error("[face] Face detection disabled. Re-download models/res10_300x300_ssd_iter_140000.caffemodel")
+                self._net_error_logged = True
+            return []
 
         results = []
         ph, pw = proc.shape[:2]

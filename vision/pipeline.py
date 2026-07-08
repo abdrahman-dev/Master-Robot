@@ -59,6 +59,7 @@ class VisionPipeline:
 
         self._motor = None
         self._last_head_angle = 90
+        self._face_error_logged = False
 
         logger.info("[vision] Pipeline initialized. profile=%s preset=%s",
                      self._current_profile.value, _PRESET.value)
@@ -181,8 +182,14 @@ class VisionPipeline:
             context["timestamp"] = t0
 
             if self._face_tracker is not None:
-                face_results = self._face_tracker.process_frame(frame)
-                context["faces"] = face_results if face_results is not None else []
+                try:
+                    face_results = self._face_tracker.process_frame(frame)
+                    context["faces"] = face_results if face_results is not None else []
+                except Exception as e:
+                    if not self._face_error_logged:
+                        logger.error("[vision] Face tracker error (will suppress further): %s", e)
+                        self._face_error_logged = True
+                    context["faces"] = []
 
             has_face = len(context["faces"]) > 0 if context.get("faces") else False
 
