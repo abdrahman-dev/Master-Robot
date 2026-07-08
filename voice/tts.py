@@ -47,28 +47,45 @@ class TTSModule:
         self._pygame_ready = False
         self._init_pygame()
 
-    @staticmethod
-    def _detect_playback_device() -> Optional[str]:
-        from voice.audio_device import get_alsa_playback_device
+    def _probe_and_init_mixer(self) -> bool:
+        """Probe ALSA playback devices and init pygame.mixer on the first working one.
 
-        device = get_alsa_playback_device()
-        if device:
-            logger.info("[TTS] Using ALSA playback device: %s", device)
-            os.environ["AUDIODEV"] = device
-        else:
-            logger.info("[TTS] Using default ALSA playback device")
-        return device
+        Logs every attempt and the exact SDL error.  The mixer stays
+        initialized after this call (no quit).
+        """
+        import pygame
+        self._pygame = pygame
+
+        # 1. Try ALSA default (fast path)
+        try:
+            pygame.mixer.init(frequency=44100, size=-16, channels=2)
+            logger.info("[TTS] pygame.mixer initialized on default ALSA device")
+            return True
+        except pygame.error as e:
+            logger.info("[TTS] Probe: default ALSA device failed: %s", e)
+
+        # 2. Enumerate all playback devices and probe each one
+        from voice.audio_device import enumerate_alsa_playback_devices
+
+        candidates = enumerate_alsa_playback_devices()
+        for device in candidates:
+            try:
+                pygame.mixer.init(frequency=44100, size=-16, channels=2, devicename=device)
+                logger.info("[TTS] pygame.mixer initialized on device: %s", device)
+                os.environ["AUDIODEV"] = device
+                return True
+            except pygame.error as e:
+                logger.info("[TTS] Probe: device %s failed: %s", device, e)
+
+        logger.error("[TTS] No working ALSA playback device found")
+        return False
 
     def _init_pygame(self):
         try:
-            import pygame
-            self._pygame = pygame
-            device = self._detect_playback_device()
-            kwargs = {}
-            if device:
-                kwargs["devicename"] = device
-            pygame.mixer.init(**kwargs)
-            self._pygame_ready = True
+            if self._probe_and_init_mixer():
+                self._pygame_ready = True
+            else:
+                logger.warning("[TTS] pygame mixer init failed — no working device")
         except Exception as e:
             logger.warning("[TTS] pygame mixer init failed: %s", e)
 
@@ -77,14 +94,7 @@ class TTSModule:
         if pygame.mixer.get_init():
             return True
         try:
-            device = self._detect_playback_device()
-            kwargs = {"frequency": 44100, "size": -16, "channels": 2, "buffer": 2048}
-            if device:
-                kwargs["devicename"] = device
-            pygame.mixer.pre_init(**kwargs)
-            pygame.mixer.init(**kwargs)
-            logger.info("[TTS] pygame.mixer initialized standalone")
-            return True
+            return self._probe_and_init_mixer()
         except Exception as e:
             logger.error("[TTS] Failed to initialize pygame.mixer: %s", e)
             return False

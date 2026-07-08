@@ -136,26 +136,16 @@ def get_device_sample_rate(device_index: int) -> Optional[int]:
         return None
 
 
-def get_alsa_playback_device() -> Optional[str]:
-    """Detect the best ALSA playback device for TTS audio output.
+def enumerate_alsa_playback_devices() -> list[str]:
+    """Parse ``aplay -l`` and return all candidate ALSA playback device names.
 
-    Uses ``aplay -l`` to enumerate playback devices, preferring USB
-    devices over HDMI or headphone jack.  On non-Linux platforms or
-    when ``aplay`` is unavailable it returns *None*, letting callers
-    fall back to the ALSA default.
-
-    Returns
-    -------
-    str or None
-        An ALSA device identifier (e.g. ``plughw:3,0``) or *None*.
+    Each physical device produces two entries (``plughw:N,M`` first, then
+    ``hw:N,M``) so that callers can probe with ``pygame.mixer.init()``
+    until one succeeds.  Returns an empty list on non-Linux or when
+    ``aplay`` is unavailable.
     """
-    override = AUDIO_DEVICE_OVERRIDE
-    if override:
-        logger.info("Using ROBOT_AUDIO_DEVICE override for playback: %s", override)
-        return override
-
     if sys.platform != "linux":
-        return None
+        return []
 
     try:
         result = subprocess.run(
@@ -165,23 +155,27 @@ def get_alsa_playback_device() -> Optional[str]:
             timeout=5,
         )
     except (subprocess.SubprocessError, FileNotFoundError):
-        logger.warning("aplay not available — cannot auto-detect playback device")
-        return None
+        logger.warning("aplay not available — cannot enumerate playback devices")
+        return []
 
-    candidates: list[tuple[int, str]] = []
+    devices: list[str] = []
+    seen: set[tuple[int, int]] = set()
+
     for line in result.stdout.splitlines():
-        lower = line.lower()
-        if "usb" in lower:
-            m = re.search(r"card\s+(\d+):", line)
-            if m:
-                card = int(m.group(1))
-                candidates.append((card, line.strip()))
+        m = re.search(r"card\s+(\d+):.*device\s+(\d+):", line)
+        if m:
+            card = int(m.group(1))
+            sub = int(m.group(2))
+            if (card, sub) not in seen:
+                seen.add((card, sub))
+                desc = line.strip()
+                devices.append(f"plughw:{card},{sub}")
+                devices.append(f"hw:{card},{sub}")
+                logger.info("[ALSA] Found playback candidate: plughw:%d,%d — %s", card, sub, desc)
 
-    if candidates:
-        card, desc = candidates[0]
-        device = f"plughw:{card},0"
-        logger.info("Selected USB playback device card %d — %s", card, desc)
-        return device
+    if not devices:
+        logger.warning("[ALSA] No playback devices found in aplay -l output")
+    else:
+        logger.info("[ALSA] %d playback device(s) enumerated", len(devices) // 2)
 
-    logger.info("No USB playback device found — will use ALSA default")
-    return None
+    return devices
