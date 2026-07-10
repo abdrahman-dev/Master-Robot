@@ -56,30 +56,20 @@ def main():
     from vision.modules.gesture import GestureDetector
     gesture = GestureDetector()
 
-    # 4. Emotion detector
-    logger.info("[4/7] Initializing emotion detector...")
-    from vision.modules.emotion import EmotionDetector
-    try:
-        emotion = EmotionDetector()
-        logger.info("Emotion detector ready")
-    except Exception as e:
-        logger.warning("Emotion detector failed (non-critical): %s", e)
-        emotion = None
-
-    # 5. Object recognition (YOLO) - LAZY LOAD
-    logger.info("[5/7] Initializing object recognition (lazy)...")
+    # 4. Object recognition (YOLO) - LAZY LOAD
+    logger.info("[4/6] Initializing object recognition (lazy)...")
     from vision.modules.objects import ObjectRecognitionModule
     objects_mod = ObjectRecognitionModule(frame_skip=1)
     objects_mod.enabled = True
 
-    # 6. Scene segmentation (YOLO) - LAZY LOAD
-    logger.info("[6/7] Initializing scene segmentation (lazy)...")
+    # 5. Scene segmentation (YOLO) - LAZY LOAD
+    logger.info("[5/6] Initializing scene segmentation (lazy)...")
     from vision.modules.scene import SceneSegmentationModule
     scene_mod = SceneSegmentationModule(frame_skip=1)
     scene_mod.enabled = True
 
-    # 7. Obstacle detector
-    logger.info("[7/7] Initializing obstacle detector...")
+    # 6. Obstacle detector
+    logger.info("[6/6] Initializing obstacle detector...")
     from vision.modules.obstacle import ObstacleDetector
     obstacle = ObstacleDetector()
     obstacle.enabled = True
@@ -109,14 +99,6 @@ def main():
         gesture_result = gesture.process_frame(frame)
         gt = time.monotonic() - t0
 
-        # Emotion
-        et = 0
-        emotion_result = {}
-        if emotion:
-            t0 = time.monotonic()
-            emotion_result = emotion.process_frame(frame)
-            et = time.monotonic() - t0
-
         # Objects
         t0 = time.monotonic()
         objects_result = objects_mod.process_frame(frame)
@@ -145,10 +127,10 @@ def main():
 
         logger.info(
             "Frame %3d/%d | %s | %s | %s | "
-            "Face:%4.0fms Gesture:%4.0fms Emotion:%4.0fms Object:%4.0fms Scene:%4.0fms Obstacle:%4.0fms",
+            "Face:%4.0fms Gesture:%4.0fms Object:%4.0fms Scene:%4.0fms Obstacle:%4.0fms",
             i + 1, FRAMES_TO_CAPTURE,
             frame_face_status, frame_obj_status, frame_gesture_status,
-            ft * 1000, gt * 1000, et * 1000, ot * 1000, st * 1000, obt * 1000,
+            ft * 1000, gt * 1000, ot * 1000, st * 1000, obt * 1000,
         )
 
         if (i + 1) % SAVE_EVERY_N == 0 or i == 0 or (faces and not hasattr(locals(), '_last_face_save')):
@@ -176,9 +158,9 @@ def main():
             # Info overlay
             info_lines = [
                 f"Frame {i+1}/{FRAMES_TO_CAPTURE}",
-                f"Faces: {len(faces)} | Gesture: {gesture_result['gesture']} | Emotion: {emotion_result.get('emotion', 'N/A')}",
+                f"Faces: {len(faces)} | Gesture: {gesture_result['gesture']}",
                 f"Objects: {objects_result['count']} | Obstacle: {obstacle_result['direction']}",
-                f"Times(ms) F:{ft*1000:.0f} G:{gt*1000:.0f} E:{et*1000:.0f} O:{ot*1000:.0f} S:{st*1000:.0f}",
+                f"Times(ms) F:{ft*1000:.0f} G:{gt*1000:.0f} O:{ot*1000:.0f} S:{st*1000:.0f}",
             ]
             for li, line in enumerate(info_lines):
                 cv2.putText(display, line, (8, 20 + li * 18),
@@ -204,8 +186,6 @@ def main():
     cam.close()
     face_tracker.close()
     gesture.close()
-    if emotion:
-        emotion.close()
     objects_mod.close()
     scene_mod.close()
     obstacle.close()

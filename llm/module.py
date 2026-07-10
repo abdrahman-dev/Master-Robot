@@ -49,7 +49,6 @@ def build_vision_prompt(user_message: str, vision_context: Optional[Dict[str, An
 
     faces_data = vision_context.get("faces", [])
     gesture_data = vision_context.get("gesture", {})
-    emotion_data = vision_context.get("emotion", {})
     objects_data = vision_context.get("objects", {})
     scene_data = vision_context.get("scene", {})
     obstacle_data = vision_context.get("obstacle", {})
@@ -69,10 +68,6 @@ def build_vision_prompt(user_message: str, vision_context: Optional[Dict[str, An
     scene_desc = scene_data.get("scene_description", "")
     if scene_desc:
         parts.append(f"المكان: {scene_desc[:60]}")
-
-    emotion = emotion_data.get("emotion", "")
-    if emotion and emotion not in ("neutral", "", "none"):
-        parts.append(f"الشخص يبدو: {emotion}")
 
     gesture = gesture_data.get("gesture", "")
     if gesture and gesture not in ("none", "", "unknown"):
@@ -373,6 +368,14 @@ class LLMModule:
         self.session_manager = session_manager or SessionManager()
         self.memory_manager = MemoryManager(self.session_manager, self.openrouter)
 
+        knowledge_path = Path(__file__).resolve().parent.parent / "knowledge" / "robot_knowledge.md"
+        if knowledge_path.is_file():
+            self._robot_knowledge = knowledge_path.read_text(encoding="utf-8").strip()
+            logger.info("[LLM] Robot knowledge loaded (%d chars)", len(self._robot_knowledge))
+        else:
+            self._robot_knowledge = ""
+            logger.info("[LLM] Robot knowledge not found at %s, skipped", knowledge_path)
+
     def create_session(self, student_name: str, language: Optional[str] = None) -> str:
         return self.session_manager.create_session(student_name, language)
 
@@ -394,7 +397,7 @@ class LLMModule:
             system_content = (
                 _SETTINGS.llm.system_prompt_arabic
                 + "\n\nقواعد إلزامية يجب الالتزام بها دائماً دون استثناء:\n"
-                + "1) تحدث باللغة العربية الفصحى البسيطة والواضحة فقط، حتى لو كان السؤال بلغة أخرى.\n"
+                + "1) تحدث باللغة العربية العامية المصرية فقط، حتى لو كان السؤال بلغة أخرى.\n"
                 + "2) لا تستخدم أي رمز تعبيري (إيموجي)، ولا أي رموز خاصة، ولا علامات نجمية أو تنسيق Markdown.\n"
                 + "3) لا تستخدم أي كلمة أو حرف إنجليزي إطلاقاً، إلا إذا كان اسم علم لا يوجد له مقابل عربي شائع.\n"
                 + "4) اجعل إجابتك في جملة أو جملتين فقط، بأسلوب بسيط يفهمه طفل في المرحلة الابتدائية.\n"
@@ -415,8 +418,22 @@ class LLMModule:
             )
 
         final_message = build_vision_prompt(user_message, vision_context)
-        logger.info("[LLM] vision_context=%s", vision_context)
-        logger.info("[LLM] final_message=%s", final_message)
+        if vision_context:
+            v_faces = len(vision_context.get("faces", []))
+            v_gesture = vision_context.get("gesture", {}).get("gesture", "none")
+            v_objects = vision_context.get("objects", {}).get("count", 0)
+            v_scene = vision_context.get("scene", {}).get("scene_description", "")
+            v_obstacle = vision_context.get("obstacle", {}).get("obstacle_detected", False)
+            v_obs_conf = vision_context.get("obstacle", {}).get("confidence", 0.0)
+            v_parts = [f"faces={v_faces}", f"gesture={v_gesture}", f"objects={v_objects}"]
+            if v_scene:
+                v_parts.append(f"scene={v_scene[:40]}")
+            v_parts.append(f"obstacle={v_obstacle}({v_obs_conf})")
+            logger.info("[LLM] vision_context: %s", " | ".join(v_parts))
+        else:
+            logger.info("[LLM] vision_context: none")
+        logger.info("[LLM] final_message length=%d", len(final_message))
+        logger.debug("[LLM] final_message=%s", final_message)
         self.session_manager.add_message(session_id, "user", user_message or "[vision update]")
 
         history = self.session_manager.get_sliding_window(
@@ -425,18 +442,26 @@ class LLMModule:
 
         messages = [
             {"role": "system", "content": system_content},
+            *([{"role": "system", "content": self._robot_knowledge}] if self._robot_knowledge else []),
             *([{"role": "system", "content": academic_context}] if academic_context else []),
             *history,
             {"role": "user", "content": "[تذكير: ردك لازم يكون بالعربية العامية المصرية فقط]" if language == "ar" else "[Reminder: Reply in English only]"},
-            {"role": "assistant", "content": "حسناً، سأرد باللغة العربية الفصحى." if language == "ar" else "Sure, I will reply in English only."},
+            {"role": "assistant", "content": "حسناً، سأرد بالعربية العامية المصرية." if language == "ar" else "Sure, I will reply in English only."},
             {"role": "user", "content": final_message},
         ]
 
-        logger.info(f"[LLM] Sending to OpenRouter (lang={language}, vision={bool(vision_context)})")
+        history_len = len(history)
+        logger.info(
+            "[LLM] Sending to OpenRouter | text=%s vision=%s faces=%d academic=%s history=%d",
+            (user_message or "")[:60], bool(vision_context),
+            len(vision_context.get("faces", [])) if vision_context else 0,
+            bool(academic_context), history_len,
+        )
         t0 = datetime.now()
         response = self.openrouter.chat(messages)
         elapsed = (datetime.now() - t0).total_seconds()
-        logger.info(f"[LLM] Response received in {elapsed:.1f}s: {response[:200]}")
+        logger.info("[LLM] Response received in %.1fs | length=%d chars | preview=%s",
+                     elapsed, len(response), response[:120])
 
         self.session_manager.add_message(session_id, "assistant", response)
 

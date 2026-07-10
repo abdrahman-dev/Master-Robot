@@ -4,14 +4,13 @@ import threading
 import time
 from collections import deque, Counter
 from contextlib import contextmanager
-from typing import Callable, Dict, Optional
+from typing import Dict, Optional
 
 from config.settings import get_settings, IS_RASPBERRY_PI, VisionProfile, detect_preset, profile_module_config
 from config.diagnostics import get_cpu_temperature, THERMAL_THROTTLE_C, THERMAL_RESTORE_C
 from vision.camera import CameraManager
 from vision.modules.face_tracker import FaceIdentityTracker
 from vision.modules.gesture import GestureDetector
-from vision.modules.emotion import EmotionDetector
 from vision.modules.objects import ObjectRecognitionModule
 from vision.modules.scene import SceneSegmentationModule
 from vision.modules.obstacle import ObstacleDetector
@@ -28,7 +27,6 @@ class VisionPipeline:
         self._camera: Optional[CameraManager] = None
         self._face_tracker: Optional[FaceIdentityTracker] = None
         self._gesture_detector: Optional[GestureDetector] = None
-        self._emotion_detector: Optional[EmotionDetector] = None
         self._object_recognition: Optional[ObjectRecognitionModule] = None
         self._scene_segmentation: Optional[SceneSegmentationModule] = None
         self._obstacle_detector: Optional[ObstacleDetector] = None
@@ -55,17 +53,12 @@ class VisionPipeline:
         self._load_shed_active = False
         self._profile_downgraded = False
 
-        self._watchdog_ping: Optional[Callable] = None
-
         self._motor = None
         self._last_head_angle = 90
         self._face_error_logged = False
 
         logger.info("[vision] Pipeline initialized. profile=%s preset=%s",
                      self._current_profile.value, _PRESET.value)
-
-    def set_watchdog_ping(self, fn: Callable) -> None:
-        self._watchdog_ping = fn
 
     def set_motor_controller(self, motor) -> None:
         self._motor = motor
@@ -88,7 +81,6 @@ class VisionPipeline:
 
             self._face_tracker = FaceIdentityTracker(frame_skip=self._current_frame_skip)
             self._gesture_detector = GestureDetector()
-            self._emotion_detector = EmotionDetector()
             self._object_recognition = ObjectRecognitionModule(frame_skip=max(6, self._current_frame_skip * 2))
             self._scene_segmentation = SceneSegmentationModule(frame_skip=max(10, self._current_frame_skip * 3))
             self._obstacle_detector = ObstacleDetector()
@@ -112,11 +104,9 @@ class VisionPipeline:
             self._scene_segmentation.enabled = config["enable_scene"]
         if self._obstacle_detector:
             self._obstacle_detector.enabled = config["enable_obstacle"]
-        if self._emotion_detector:
-            self._emotion_detector.enabled = False 
-        logger.info("[vision] Profile %s applied: objects=%s scene=%s obstacle=%s emotion=%s",
+        logger.info("[vision] Profile %s applied: objects=%s scene=%s obstacle=%s",
                      profile.value, config["enable_objects"], config["enable_scene"],
-                     config["enable_obstacle"], config["enable_emotion"])
+                     config["enable_obstacle"])
 
     def set_profile(self, profile: VisionProfile) -> None:
         self._current_profile = profile
@@ -136,7 +126,6 @@ class VisionPipeline:
         for mod, name in [
             (self._face_tracker, "face tracker"),
             (self._gesture_detector, "gesture detector"),
-            (self._emotion_detector, "emotion detector"),
             (self._object_recognition, "object recognition"),
             (self._scene_segmentation, "scene segmentation"),
             (self._obstacle_detector, "obstacle detector"),
@@ -152,7 +141,6 @@ class VisionPipeline:
 
         self._face_tracker = None
         self._gesture_detector = None
-        self._emotion_detector = None
         self._object_recognition = None
         self._scene_segmentation = None
         self._obstacle_detector = None
@@ -196,8 +184,6 @@ class VisionPipeline:
             if has_face:
                 if self._gesture_detector is not None:
                     context["gesture"] = self._gesture_detector.process_frame(frame)
-                if self._emotion_detector is not None:
-                    context["emotion"] = self._emotion_detector.process_frame(frame)
 
             if self._object_recognition is not None and self._object_recognition.enabled:
                 context["objects"] = self._object_recognition.process_frame(frame)
@@ -214,7 +200,6 @@ class VisionPipeline:
             entry = {
                 "faces": copy.deepcopy(context.get("faces", [])),
                 "gesture": copy.deepcopy(context.get("gesture", {})),
-                "emotion": copy.deepcopy(context.get("emotion", {})),
                 "objects": copy.deepcopy(context.get("objects", {})),
                 "scene": copy.deepcopy(context.get("scene", {})),
                 "obstacle": copy.deepcopy(context.get("obstacle", {})),
@@ -297,26 +282,6 @@ class VisionPipeline:
     def get_profile(self) -> VisionProfile:
         return self._current_profile
 
-    def warmup(self, frames: int = 3) -> bool:
-        if not self._is_open:
-            logger.error("[vision] Cannot warmup: pipeline not open")
-            return False
-
-        logger.info("[vision] Warming up camera (%d frames)...", frames)
-        try:
-            for i in range(frames):
-                if self._shutdown_event.is_set():
-                    return False
-                frame = self._camera.get_frame()
-                if frame is None:
-                    logger.warning("[vision] Warmup frame %d failed", i + 1)
-                    return False
-            logger.info("[vision] Warmup complete")
-            return True
-        except Exception as e:
-            logger.exception("[vision] Warmup error: %s", e)
-            return False
-
     def enable_object_recognition(self):
         if self._object_recognition is not None:
             self._object_recognition.enabled = True
@@ -360,8 +325,6 @@ class VisionPipeline:
 
         try:
             while self._running and not self._shutdown_event.is_set():
-                if self._watchdog_ping:
-                    self._watchdog_ping()
                 context = self.get_all_context()
 
                 # Head tracking — move servo to follow largest face
@@ -432,7 +395,6 @@ class VisionPipeline:
             "timestamp": 0.0,
             "faces": [],
             "gesture": {"gesture": "none", "command": "none", "hand_found": False, "landmarks": None},
-            "emotion": {"emotion": "neutral", "confidence": 0.0, "face_found": False},
             "objects": {"objects": [], "count": 0, "prompt": ""},
             "scene": {"segments": [], "scene_description": "", "dominant_segment": ""},
             "obstacle": {"obstacle_detected": False, "direction": "clear", "confidence": 0.0},

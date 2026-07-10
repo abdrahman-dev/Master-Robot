@@ -147,7 +147,6 @@ def main():
         "models/res10_300x300_ssd_iter_140000.caffemodel",
         "models/yolov8s.pt",
         "models/yolov8s-seg.pt",
-        "models/emotion_cnn_pytorch.pt",
     ]
 
     for mf in model_files:
@@ -196,7 +195,7 @@ def main():
         "voice.vad", "voice.asr", "voice.tts", "voice.face",
         "voice.pipeline", "vision.camera", "vision.pipeline",
         "vision.modules.face_tracker", "vision.modules.gesture",
-        "vision.modules.emotion", "vision.modules.objects",
+        "vision.modules.objects",
         "vision.modules.scene", "vision.modules.obstacle",
         "llm.module", "config.settings", "config.diagnostics",
         "hardware.motor_controller",

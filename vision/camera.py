@@ -1,6 +1,7 @@
 import cv2
 import numpy as np
 import logging
+import os
 import threading
 from pathlib import Path
 from typing import Optional
@@ -34,6 +35,10 @@ class CameraManager:
         self._shutdown_event = threading.Event()
         self._logged_channel_strip = False
 
+        self._auto_detect = os.environ.get("CAMERA_AUTO_DETECT", "").lower() in ("true", "1", "yes")
+        self._configured_device = os.environ.get("CAMERA_DEVICE", "") or None
+        self._selected_device = None
+
         if IS_RASPBERRY_PI and PICAMERA2_AVAILABLE:
             self._backend = "picamera2"
             logger.info("CameraManager: picamera2 backend available")
@@ -42,6 +47,8 @@ class CameraManager:
             if IS_RASPBERRY_PI and not PICAMERA2_AVAILABLE:
                 logger.warning("CameraManager: picamera2 not available, falling back to OpenCV")
 
+        if self._auto_detect:
+            logger.info("[CAMERA] Auto-detect enabled")
         logger.info(f"CameraManager initialized - backend: {self._backend}")
 
     def get_backend_name(self) -> str:
@@ -61,13 +68,34 @@ class CameraManager:
 
         self._shutdown_event.clear()
         try:
-            if self._backend == "picamera2":
-                self._open_picamera()
+            if self._selected_device is None and (self._configured_device or self._auto_detect):
+                self._selected_device = self._discover_camera()
+
+            if self._selected_device is not None:
+                if self._selected_device == "picamera2":
+                    self._backend = "picamera2"
+                    self._open_picamera()
+                else:
+                    self._backend = "opencv"
+                    self._open_opencv(self._selected_device)
             else:
-                self._open_opencv()
+                if self._backend == "picamera2":
+                    self._open_picamera()
+                else:
+                    self._open_opencv()
 
             self._is_open = True
-            logger.info(f"Camera opened - {CAMERA_WIDTH}x{CAMERA_HEIGHT} @ {CAMERA_FPS}fps")
+            backend_name = self._backend.capitalize()
+            if self._selected_device == "picamera2":
+                device_str = "picamera2"
+            elif isinstance(self._selected_device, int):
+                device_str = f"index {self._selected_device}"
+            else:
+                device_str = str(self._selected_device)
+            logger.info("[CAMERA] Backend   : %s", backend_name)
+            logger.info("[CAMERA] Device    : %s", device_str)
+            logger.info("[CAMERA] Resolution: %dx%d", CAMERA_WIDTH, CAMERA_HEIGHT)
+            logger.info("[CAMERA] FPS       : %d", CAMERA_FPS)
             return True
 
         except Exception as e:
@@ -150,30 +178,44 @@ class CameraManager:
         )
         self._camera.configure(config)
         self._camera.start()
+        self._selected_device = "picamera2"
 
     def _capture_picamera(self) -> np.ndarray:
         frame = self._camera.capture_array("main")
         if frame is not None and frame.ndim == 3 and frame.shape[2] == 4:
-            frame = frame[:, :, :3]
+            frame = cv2.cvtColor(frame[:, :, :3], cv2.COLOR_RGB2BGR)
             if not self._logged_channel_strip:
-                logger.debug("[camera] Stripped 4th channel from picamera2 frame (XBGR8888 -> BGR)")
+                logger.debug("[camera] Converted picamera2 XBGR8888 -> BGR")
                 self._logged_channel_strip = True
         frame = cv2.flip(frame, 0)
         return frame
 
-    def _open_opencv(self):
+    def _open_opencv(self, device=None):
         cap = None
-        for idx in FALLBACK_INDICES:
-            cap = cv2.VideoCapture(idx, cv2.CAP_DSHOW)
+
+        if device is None:
+            for idx in FALLBACK_INDICES:
+                cap = cv2.VideoCapture(idx, cv2.CAP_DSHOW)
+                cap.set(cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, 2000)
+                ret = cap.grab()
+                if ret:
+                    logger.info(f"Opened camera at index {idx}")
+                    self._selected_device = idx
+                    break
+                cap.release()
+                cap = None
+            else:
+                raise RuntimeError(f"OpenCV could not open camera. Tried indices: {FALLBACK_INDICES}")
+        else:
+            if isinstance(device, int) and not IS_RASPBERRY_PI:
+                cap = cv2.VideoCapture(device, cv2.CAP_DSHOW)
+            else:
+                cap = cv2.VideoCapture(device)
             cap.set(cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, 2000)
             ret = cap.grab()
-            if ret:
-                logger.info(f"Opened camera at index {idx}")
-                break
-            cap.release()
-            cap = None
-        else:
-            raise RuntimeError(f"OpenCV could not open camera. Tried indices: {FALLBACK_INDICES}")
+            if not ret:
+                cap.release()
+                raise RuntimeError(f"Failed to open camera at {device}")
 
         cap.set(cv2.CAP_PROP_FRAME_WIDTH, CAMERA_WIDTH)
         cap.set(cv2.CAP_PROP_FRAME_HEIGHT, CAMERA_HEIGHT)
@@ -189,3 +231,79 @@ class CameraManager:
             logger.warning("Invalid frame received")
             return None
         return cv2.flip(frame, 0)
+
+    def _probe_picamera(self) -> bool:
+        try:
+            cam = Picamera2()
+            config = cam.create_preview_configuration(
+                main={"size": (CAMERA_WIDTH, CAMERA_HEIGHT), "format": "XBGR8888"},
+                buffer_count=1,
+            )
+            cam.configure(config)
+            cam.start()
+            frame = cam.capture_array("main")
+            if frame is not None and frame.size > 0:
+                h, w = frame.shape[:2]
+                logger.info("[CAMERA] Camera verified (%dx%d)", w, h)
+                cam.stop()
+                cam.close()
+                return True
+            cam.stop()
+            cam.close()
+            return False
+        except Exception as e:
+            logger.warning("[CAMERA] Picamera2 probe failed: %s", e)
+            return False
+
+    def _probe_opencv(self, device) -> bool:
+        try:
+            if isinstance(device, int) and not IS_RASPBERRY_PI:
+                cap = cv2.VideoCapture(device, cv2.CAP_DSHOW)
+            else:
+                cap = cv2.VideoCapture(device)
+            cap.set(cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, 2000)
+            ret, frame = cap.read()
+            if ret and frame is not None and frame.size > 0:
+                h, w = frame.shape[:2]
+                logger.info("[CAMERA] Camera verified (%dx%d)", w, h)
+                cap.release()
+                return True
+            cap.release()
+            return False
+        except Exception as e:
+            logger.warning("[CAMERA] OpenCV probe for %s failed: %s", device, e)
+            return False
+
+    def _discover_camera(self):
+        configured = self._configured_device
+
+        if configured:
+            device = int(configured) if configured.isdigit() else configured
+            logger.info("[CAMERA] Trying configured device: %s", configured)
+            if self._probe_opencv(device):
+                logger.info("[CAMERA] Using configured device: %s", configured)
+                return device
+            if not self._auto_detect:
+                raise RuntimeError(
+                    f"Configured camera device {configured} not found and auto-detect is disabled"
+                )
+            logger.warning("[CAMERA] Configured device %s failed, falling back to auto-detect", configured)
+
+        candidates = []
+        if IS_RASPBERRY_PI:
+            if PICAMERA2_AVAILABLE:
+                logger.info("[CAMERA] Trying Picamera2...")
+                if self._probe_picamera():
+                    logger.info("[CAMERA] Using: Picamera2")
+                    return "picamera2"
+            candidates = [f"/dev/video{i}" for i in range(6)]
+        else:
+            candidates = list(range(6))
+
+        for dev in candidates:
+            logger.info("[CAMERA] Trying %s...", dev)
+            if self._probe_opencv(dev):
+                logger.info("[CAMERA] Using: %s", dev)
+                return dev
+
+        raise RuntimeError("No working camera found")

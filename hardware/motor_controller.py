@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import os
 import socket
+import threading
 import time
 from dataclasses import dataclass
 from typing import Optional
@@ -36,6 +37,7 @@ class MotorController:
         self._sock: Optional[socket.socket] = None
         self._available = False
         self._recv_buffer = ""
+        self._lock = threading.RLock()
 
         self._current_speed: int = 180
         self._head_angle: int = 90
@@ -64,6 +66,12 @@ class MotorController:
     # ── internal helpers: TCP transport ───────────────────────
 
     def _connect(self) -> bool:
+        with self._lock:
+            if self._available and self._sock is not None:
+                return True
+            return self._connect_unlocked()
+
+    def _connect_unlocked(self) -> bool:
         try:
             sock = socket.create_connection(
                 (self._esp32_ip, self._esp32_port),
@@ -85,32 +93,34 @@ class MotorController:
             return False
 
     def _handle_disconnect(self):
-        if self._sock is not None:
-            try:
-                self._sock.close()
-            except Exception:
-                pass
-            self._sock = None
-        self._available = False
-        self._recv_buffer = ""
+        with self._lock:
+            if self._sock is not None:
+                try:
+                    self._sock.close()
+                except Exception:
+                    pass
+                self._sock = None
+            self._available = False
+            self._recv_buffer = ""
 
     # ── internal helpers: commands ────────────────────────────
 
     def _send(self, command: str) -> bool:
-        if not self._available:
-            self._connect()
-        if not self._available or self._sock is None:
-            return False
-        try:
-            payload = (command + "\n").encode("utf-8")
-            self._sock.sendall(payload)
-            logger.debug("[motor] Sent: %s", command)
-            time.sleep(0.05)
-            return True
-        except (OSError, socket.timeout) as e:
-            logger.warning("[motor] Send failed: %s", e)
-            self._handle_disconnect()
-            return False
+        with self._lock:
+            if not self._available:
+                self._connect_unlocked()
+            if not self._available or self._sock is None:
+                return False
+            try:
+                payload = (command + "\n").encode("utf-8")
+                self._sock.sendall(payload)
+                logger.debug("[motor] Sent: %s", command)
+                time.sleep(0.05)
+                return True
+            except (OSError, socket.timeout) as e:
+                logger.warning("[motor] Send failed: %s", e)
+                self._handle_disconnect()
+                return False
 
     def _send_motion(self, command: str, duration_ms: int = 0) -> bool:
         if duration_ms > 0:
@@ -208,24 +218,25 @@ class MotorController:
     # ── TCP I/O ────────────────────────────────────────────────
 
     def read_line(self) -> Optional[str]:
-        if not self._available or self._sock is None:
-            return None
-        try:
-            data = self._sock.recv(4096)
-            if not data:
-                self._handle_disconnect()
+        with self._lock:
+            if not self._available or self._sock is None:
                 return None
-            self._recv_buffer += data.decode("utf-8", errors="replace")
-            if "\n" in self._recv_buffer:
-                line, self._recv_buffer = self._recv_buffer.split("\n", 1)
-                line = line.strip()
-                return line if line else None
-        except (BlockingIOError, socket.timeout):
-            pass
-        except (OSError, ConnectionError) as e:
-            logger.warning("[motor] Read failed: %s", e)
-            self._handle_disconnect()
-        return None
+            try:
+                data = self._sock.recv(4096)
+                if not data:
+                    self._handle_disconnect()
+                    return None
+                self._recv_buffer += data.decode("utf-8", errors="replace")
+                if "\n" in self._recv_buffer:
+                    line, self._recv_buffer = self._recv_buffer.split("\n", 1)
+                    line = line.strip()
+                    return line if line else None
+            except (BlockingIOError, socket.timeout):
+                pass
+            except (OSError, ConnectionError) as e:
+                logger.warning("[motor] Read failed: %s", e)
+                self._handle_disconnect()
+            return None
 
     # ── lifecycle ─────────────────────────────────────────────
 
@@ -233,11 +244,12 @@ class MotorController:
         self.stop()
         self.center_servos()
         time.sleep(0.15)
-        if self._sock is not None:
-            try:
-                self._sock.close()
-                logger.info("[motor] TCP socket closed")
-            except Exception as e:
-                logger.warning("[motor] Error closing socket: %s", e)
-            self._sock = None
-        self._available = False
+        with self._lock:
+            if self._sock is not None:
+                try:
+                    self._sock.close()
+                    logger.info("[motor] TCP socket closed")
+                except Exception as e:
+                    logger.warning("[motor] Error closing socket: %s", e)
+                self._sock = None
+            self._available = False

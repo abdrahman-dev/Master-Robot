@@ -253,7 +253,7 @@ class VoicePipeline:
                 language="ar",  # Fixed to Arabic — change to _SETTINGS.asr.language_mode for auto-detect
             )
             asr_time = time.monotonic() - t0
-            logger.info("%s [ASR] result=%r lang=%r time=%.2fs", src, text, detected_lang, asr_time)
+            logger.info('%s [ASR] Recognized: "%s" (lang=%s, time=%.2fs)', src, text, detected_lang, asr_time)
 
             if not text:
                 if self._face_set_state:
@@ -310,13 +310,11 @@ class VoicePipeline:
                 objects = ctx.get("objects", {}).get("objects", [])
                 obstacle = ctx.get("obstacle", {}).get("obstacle_detected", False)
                 gesture = ctx.get("gesture", {}).get("gesture", "none")
-                emotion = ctx.get("emotion", {}).get("emotion", "neutral")
                 has_real_data = (
                     len(faces) > 0 or
                     len(objects) > 0 or
                     obstacle or
-                    gesture not in ("none", "", "unknown") or
-                    emotion not in ("neutral", "", "none")
+                    gesture not in ("none", "", "unknown")
                 )
                 if has_real_data:
                     vision_context = ctx
@@ -659,13 +657,11 @@ class VoicePipeline:
             objects = ctx.get("objects", {}).get("objects", [])
             obstacle = ctx.get("obstacle", {}).get("obstacle_detected", False)
             gesture = ctx.get("gesture", {}).get("gesture", "none")
-            emotion = ctx.get("emotion", {}).get("emotion", "neutral")
             has_real_data = (
                 len(faces) > 0 or
                 len(objects) > 0 or
                 obstacle or
-                gesture not in ("none", "", "unknown") or
-                emotion not in ("neutral", "", "none")
+                gesture not in ("none", "", "unknown")
             )
             if has_real_data:
                 vision_context = ctx

@@ -91,7 +91,6 @@ def run_startup_diagnostics() -> Dict[str, str]:
         ("face_weights", settings.paths.face_weights_name, 1_000_000),
         ("yolov8s", "yolov8s.pt", 1_000_000),
         ("yolov8s-seg", "yolov8s-seg.pt", 1_000_000),
-        ("emotion", "emotion_cnn_pytorch.pt", 100_000),
     ]
 
     for model_name, filename, min_size in _MODEL_CHECKS:
