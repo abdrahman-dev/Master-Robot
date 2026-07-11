@@ -331,7 +331,7 @@ class VoicePipeline:
                     academic_context=academic_ctx,
                 )
             except LLMModuleError:
-                logger.warning("%s [LLM] OpenRouter unavailable, using fallback", src)
+                logger.warning("%s [LLM] LLM unavailable, using fallback", src)
                 lang = detected_lang if detected_lang in ("ar", "en") else "en"
                 response = random.choice(FALLBACK_MESSAGES[lang])
             llm_time = time.monotonic() - t0
@@ -677,7 +677,7 @@ class VoicePipeline:
                 academic_context=academic_ctx,
             )
         except LLMModuleError:
-            logger.warning("[LLM] OpenRouter unavailable, using fallback")
+            logger.warning("[LLM] LLM unavailable, using fallback")
             lang = language if language in ("ar", "en") else "en"
             response = random.choice(FALLBACK_MESSAGES[lang])
 

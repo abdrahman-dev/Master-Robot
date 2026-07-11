@@ -11,6 +11,7 @@ from typing import Optional, List, Dict, Any
 import requests
 
 from config.settings import get_settings
+from llm.providers import LLMProvider, create_provider
 
 logger = logging.getLogger(__name__)
 
@@ -84,107 +85,6 @@ def build_vision_prompt(user_message: str, vision_context: Optional[Dict[str, An
     if user_message:
         return f"{vision_line}\n\nسؤال الطالب: {user_message}"
     return vision_line
-
-
-class OpenRouterConnection:
-    def __init__(
-        self,
-        api_key: Optional[str] = None,
-        model: Optional[str] = None,
-        chat_timeout_seconds: Optional[int] = None,
-        availability_timeout_seconds: Optional[int] = None,
-    ):
-        self.api_key = api_key or _LLM.openrouter_api_key
-        self.model = model or _LLM.openrouter_model
-        self.chat_timeout = (chat_timeout_seconds or _LLM.request_timeout_seconds)
-        self.avail_timeout = (availability_timeout_seconds or _LLM.openrouter_availability_timeout_seconds)
-        self.base_url = "https://openrouter.ai/api/v1"
-
-        if not self.api_key:
-            logger.warning(
-                "[LLM] No API key configured. "
-                "Set ROBOT_OPENROUTER_API_KEY env variable. "
-                "Running in offline mode."
-            )
-
-    def is_available(self) -> bool:
-        if not self.api_key:
-            return False
-        try:
-            r = requests.get(
-                f"{self.base_url}/models",
-                headers={"Authorization": f"Bearer {self.api_key}"},
-                timeout=self.avail_timeout,
-            )
-            return r.status_code == 200
-        except Exception as e:
-            logger.error(f"[LLM] OpenRouter not reachable: {e}")
-            return False
-
-    def chat(self, messages: List[dict], timeout: Optional[int] = None) -> str:
-        if not self.api_key:
-            raise LLMModuleError(
-                "[llm] OpenRouter API key not configured."
-            )
-
-        timeout = timeout or self.chat_timeout
-        retries = 3
-        last_exc = None
-
-        for attempt in range(retries):
-            try:
-                response = requests.post(
-                    f"{self.base_url}/chat/completions",
-                    json={"model": self.model, "messages": messages},
-                    headers={
-                        "Authorization": f"Bearer {self.api_key}",
-                        "Content-Type": "application/json",
-                    },
-                    timeout=timeout,
-                )
-
-                if response.status_code == 429 or response.status_code >= 500:
-                    wait = 2 ** attempt
-                    logger.warning("[LLM] HTTP %d, retry %d/%d after %ds",
-                                   response.status_code, attempt + 1, retries, wait)
-                    time.sleep(wait)
-                    continue
-
-                if response.status_code != 200:
-                    raise LLMModuleError(
-                        f"[llm] OpenRouter returned {response.status_code}: {response.text[:200]}"
-                    )
-
-                content = (
-                    response.json()
-                    .get("choices", [{}])[0]
-                    .get("message", {})
-                    .get("content", "")
-                    .strip()
-                )
-
-                if not content:
-                    raise LLMModuleError("[llm] Empty response from OpenRouter")
-
-                return content
-
-            except (requests.Timeout, requests.ConnectionError) as e:
-                last_exc = e
-                wait = 2 ** attempt
-                logger.warning("[LLM] Attempt %d/%d failed: %s, retry in %ds",
-                               attempt + 1, retries, type(e).__name__, wait)
-                if attempt < retries - 1:
-                    time.sleep(wait)
-                continue
-            except LLMModuleError:
-                raise
-            except Exception as e:
-                raise LLMModuleError(f"[llm] Unexpected error: {e}") from e
-
-        raise LLMModuleError(
-            "[llm] OpenRouter unavailable after %d retries. "
-            "Switching to offline mode." % retries
-        )
 
 
 class SessionManager:
@@ -323,11 +223,11 @@ class MemoryManager:
     def __init__(
         self,
         session_manager: SessionManager,
-        openrouter: OpenRouterConnection,
+        provider: LLMProvider,
         window_size: Optional[int] = None,
     ):
         self.session_manager = session_manager
-        self.openrouter = openrouter
+        self.provider = provider
         self.window_size = int(window_size or _LLM.sliding_window_size)
 
     def should_summarize(self, session_id: str) -> bool:
@@ -346,7 +246,7 @@ class MemoryManager:
         )
         try:
             logger.info("[LLM] Summarizing...")
-            summary = self.openrouter.chat(
+            summary = self.provider.chat(
                 [{"role": "user", "content": prompt}],
                 timeout=_LLM.summarization_timeout_seconds,
             )
@@ -361,12 +261,12 @@ class MemoryManager:
 class LLMModule:
     def __init__(
         self,
-        backend: Optional[OpenRouterConnection] = None,
+        backend: Optional[LLMProvider] = None,
         session_manager: Optional[SessionManager] = None,
     ):
-        self.openrouter = backend or OpenRouterConnection()
+        self.provider = backend or create_provider()
         self.session_manager = session_manager or SessionManager()
-        self.memory_manager = MemoryManager(self.session_manager, self.openrouter)
+        self.memory_manager = MemoryManager(self.session_manager, self.provider)
 
         knowledge_path = Path(__file__).resolve().parent.parent / "knowledge" / "robot_knowledge.md"
         if knowledge_path.is_file():
@@ -380,7 +280,7 @@ class LLMModule:
         return self.session_manager.create_session(student_name, language)
 
     def is_ready(self) -> bool:
-        return self.openrouter.is_available()
+        return self.provider.is_available()
 
     def chat(
         self,
@@ -397,7 +297,7 @@ class LLMModule:
             system_content = (
                 _SETTINGS.llm.system_prompt_arabic
                 + "\n\nقواعد إلزامية يجب الالتزام بها دائماً دون استثناء:\n"
-                + "1) تحدث باللغة العربية العامية المصرية فقط، حتى لو كان السؤال بلغة أخرى.\n"
+                + "1) تحدث باللغة العربية الفصحى فقط، حتى لو كان السؤال بلغة أخرى.\n"
                 + "2) لا تستخدم أي رمز تعبيري (إيموجي)، ولا أي رموز خاصة، ولا علامات نجمية أو تنسيق Markdown.\n"
                 + "3) لا تستخدم أي كلمة أو حرف إنجليزي إطلاقاً، إلا إذا كان اسم علم لا يوجد له مقابل عربي شائع.\n"
                 + "4) اجعل إجابتك في جملة أو جملتين فقط، بأسلوب بسيط يفهمه طفل في المرحلة الابتدائية.\n"
@@ -445,20 +345,20 @@ class LLMModule:
             *([{"role": "system", "content": self._robot_knowledge}] if self._robot_knowledge else []),
             *([{"role": "system", "content": academic_context}] if academic_context else []),
             *history,
-            {"role": "user", "content": "[تذكير: ردك لازم يكون بالعربية العامية المصرية فقط]" if language == "ar" else "[Reminder: Reply in English only]"},
-            {"role": "assistant", "content": "حسناً، سأرد بالعربية العامية المصرية." if language == "ar" else "Sure, I will reply in English only."},
+            {"role": "user", "content": "[تذكير: ردك يجب أن يكون بالعربية الفصحى فقط]" if language == "ar" else "[Reminder: Reply in English only]"},
+            {"role": "assistant", "content": "حسناً، سأرد بالعربية الفصحى." if language == "ar" else "Sure, I will reply in English only."},
             {"role": "user", "content": final_message},
         ]
 
         history_len = len(history)
         logger.info(
-            "[LLM] Sending to OpenRouter | text=%s vision=%s faces=%d academic=%s history=%d",
+            "[LLM] Sending to LLM | text=%s vision=%s faces=%d academic=%s history=%d",
             (user_message or "")[:60], bool(vision_context),
             len(vision_context.get("faces", [])) if vision_context else 0,
             bool(academic_context), history_len,
         )
         t0 = datetime.now()
-        response = self.openrouter.chat(messages)
+        response = self.provider.chat(messages)
         elapsed = (datetime.now() - t0).total_seconds()
         logger.info("[LLM] Response received in %.1fs | length=%d chars | preview=%s",
                      elapsed, len(response), response[:120])

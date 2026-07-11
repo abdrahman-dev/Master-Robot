@@ -177,7 +177,10 @@ def main():
     # ── Network ───────────────────────────────────────────────────
     section("Network")
 
-    for host, label in [("api.openrouter.ai", "OpenRouter API"),
+    llm_provider = os.getenv("ROBOT_LLM_PROVIDER", "openrouter")
+    llm_host = "generativelanguage.googleapis.com" if llm_provider == "gemini" else "api.openrouter.ai"
+    llm_label = "Gemini API" if llm_provider == "gemini" else "OpenRouter API"
+    for host, label in [(llm_host, llm_label),
                          ("www.google.com", "Google (ASR)")]:
         try:
             s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -256,37 +259,60 @@ def main():
         check("  TTS live test", ER, str(e)[:70])
 
     # 3. LLM live test
-    api_key = os.getenv("ROBOT_OPENROUTER_API_KEY", "").strip()
-    if api_key:
-        try:
-            import requests
-            t0 = time.monotonic()
-            r = requests.post(
-                "https://openrouter.ai/api/v1/chat/completions",
-                json={
-                    "model": os.getenv("ROBOT_OPENROUTER_MODEL", "openrouter/free"),
-                    "messages": [{"role": "user", "content": "say hi"}],
-                    "max_tokens": 5,
-                },
-                headers={
-                    "Authorization": f"Bearer {api_key}",
-                    "Content-Type": "application/json",
-                },
-                timeout=15,
-            )
-            resp_ms = (time.monotonic() - t0) * 1000
-            if r.status_code == 200:
-                body = r.json()
-                model_used = body.get("model", "unknown")
-                check("  LLM API call", OK, f"HTTP {r.status_code}, {resp_ms:.0f}ms, model={model_used}")
-            elif r.status_code == 401:
-                check("  LLM API call", WN, f"HTTP 401 — invalid key ({resp_ms:.0f}ms)")
-            else:
-                check("  LLM API call", WN, f"HTTP {r.status_code} ({resp_ms:.0f}ms)")
-        except Exception as e:
-            check("  LLM live test", WN, str(e)[:60])
+    llm_provider = os.getenv("ROBOT_LLM_PROVIDER", "openrouter")
+    if llm_provider == "gemini":
+        api_key = os.getenv("ROBOT_GEMINI_API_KEY", "").strip()
+        if api_key:
+            try:
+                from google import genai
+                t0 = time.monotonic()
+                client = genai.Client(api_key=api_key)
+                resp = client.models.generate_content(
+                    model=os.getenv("ROBOT_GEMINI_MODEL", "gemini-2.0-flash"),
+                    contents="say hi",
+                    config={"max_output_tokens": 5},
+                )
+                resp_ms = (time.monotonic() - t0) * 1000
+                if resp.text:
+                    check("  LLM API call", OK, f"{resp_ms:.0f}ms, response={resp.text[:40]}")
+                else:
+                    check("  LLM API call", WN, "empty response")
+            except Exception as e:
+                check("  LLM live test", WN, str(e)[:60])
+        else:
+            check("  LLM API call", GR, "No Gemini API key — skipping LLM test")
     else:
-        check("  LLM API call", GR, "No API key — skipping LLM test")
+        api_key = os.getenv("ROBOT_OPENROUTER_API_KEY", "").strip()
+        if api_key:
+            try:
+                import requests
+                t0 = time.monotonic()
+                r = requests.post(
+                    "https://openrouter.ai/api/v1/chat/completions",
+                    json={
+                        "model": os.getenv("ROBOT_OPENROUTER_MODEL", "openrouter/free"),
+                        "messages": [{"role": "user", "content": "say hi"}],
+                        "max_tokens": 5,
+                    },
+                    headers={
+                        "Authorization": f"Bearer {api_key}",
+                        "Content-Type": "application/json",
+                    },
+                    timeout=15,
+                )
+                resp_ms = (time.monotonic() - t0) * 1000
+                if r.status_code == 200:
+                    body = r.json()
+                    model_used = body.get("model", "unknown")
+                    check("  LLM API call", OK, f"HTTP {r.status_code}, {resp_ms:.0f}ms, model={model_used}")
+                elif r.status_code == 401:
+                    check("  LLM API call", WN, f"HTTP 401 — invalid key ({resp_ms:.0f}ms)")
+                else:
+                    check("  LLM API call", WN, f"HTTP {r.status_code} ({resp_ms:.0f}ms)")
+            except Exception as e:
+                check("  LLM live test", WN, str(e)[:60])
+        else:
+            check("  LLM API call", GR, "No OpenRouter API key — skipping LLM test")
 
     # 4. Camera live test
     try:
@@ -305,6 +331,34 @@ def main():
             check("  Camera live", WN, "could not open index 0")
     except Exception as e:
         check("  Camera live test", WN, str(e)[:60])
+
+    # 5. YOLO model load test
+    for yolo_path in ["models/yolov8s.pt", "models/yolov8s-seg.pt"]:
+        fp = ROOT / yolo_path
+        if fp.exists():
+            try:
+                from ultralytics import YOLO
+                t0 = time.monotonic()
+                model = YOLO(str(fp))
+                load_ms = (time.monotonic() - t0) * 1000
+                check(f"  YOLO load: {yolo_path}", OK, f"{load_ms:.0f}ms")
+                del model
+            except Exception as e:
+                check(f"  YOLO load: {yolo_path}", WN, str(e)[:60])
+        else:
+            check(f"  YOLO load: {yolo_path}", WN, "file missing")
+
+    # 6. Microphone availability
+    try:
+        import sounddevice as sd
+        devices = sd.query_devices()
+        inputs = [d for d in devices if d["max_input_channels"] > 0]
+        if inputs:
+            check("  Microphone", OK, f"{len(inputs)} input device(s)")
+        else:
+            check("  Microphone", WN, "no input devices found")
+    except Exception as e:
+        check("  Microphone", GR, "sounddevice not available")
 
     # ── Hardware ────────────────────────────────────────────
     section("Hardware")

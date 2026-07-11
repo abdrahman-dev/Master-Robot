@@ -38,13 +38,20 @@ def main():
 
     # 1. Camera
     logger.info("[1/7] Opening camera...")
-    from vision.camera import CameraManager
+    from vision.camera import CameraManager, CAMERA_WIDTH, CAMERA_HEIGHT, CAMERA_FPS
     cam = CameraManager()
     if not cam.open():
         logger.error("Camera failed to open!")
         return
-    logger.info("Camera opened: %dx%d", cam._camera.get(cv2.CAP_PROP_FRAME_WIDTH),
-                 cam._camera.get(cv2.CAP_PROP_FRAME_HEIGHT))
+
+    device_str = str(cam._selected_device) if cam._selected_device is not None else "auto"
+    logger.info("[CAMERA] Device    : %s", device_str)
+    logger.info("[CAMERA] Backend   : %s", cam._backend.capitalize())
+    logger.info("[CAMERA] Resolution: %dx%d", CAMERA_WIDTH, CAMERA_HEIGHT)
+    logger.info("[CAMERA] FPS       : %d", CAMERA_FPS)
+    logger.info("[CAMERA] Auto-detect: %s", "enabled" if cam._auto_detect else "disabled")
+    if cam._configured_device:
+        logger.info("[CAMERA] CAMERA_DEVICE: %s", cam._configured_device)
 
     # 2. Face tracker
     logger.info("[2/7] Initializing face tracker...")

@@ -120,12 +120,14 @@ class LLMSettings:
     openrouter_api_key: str = field(default=os.getenv("ROBOT_OPENROUTER_API_KEY", ""))
     openrouter_model: str = os.getenv("ROBOT_OPENROUTER_MODEL", "openrouter/free")
     openrouter_availability_timeout_seconds: int = int(os.getenv("ROBOT_OPENROUTER_AVAILABILITY_TIMEOUT_SEC", "5"))
+    gemini_api_key: str = field(default=os.getenv("ROBOT_GEMINI_API_KEY", ""))
+    gemini_model: str = os.getenv("ROBOT_GEMINI_MODEL", "gemini-3.5-flash")
     request_timeout_seconds: int = int(os.getenv("ROBOT_LLM_REQUEST_TIMEOUT_SEC", "90"))
     summarization_timeout_seconds: int = int(os.getenv("ROBOT_LLM_SUMMARIZE_TIMEOUT_SEC", "60"))
     sliding_window_size: int = int(os.getenv("ROBOT_LLM_WINDOW_SIZE", "50"))
     system_prompt_arabic: str = (
     "أنت روبوت تعليمي ذكي اسمك روبو، ودورك الأساسي هو تعليم المستخدم ومساعدته على الفهم العميق للمفاهيم، وليس مجرد إعطاء إجابات مختصرة. "
-    "تحدث دائمًا باللغة العربية العامية المصرية الواضحة والطبيعية، ولا تستخدم أي لهجة أخرى إلا إذا طلب المستخدم ذلك صراحة. "
+    "تحدث دائمًا باللغة العربية الفصحى الواضحة والطبيعية، ولا تستخدم أي لهجة أخرى إلا إذا طلب المستخدم ذلك صراحة. "
     "تعامل مع كل سؤال وكأن المستخدم يريد أن يفهم الموضوع بالكامل، وليس فقط معرفة الإجابة النهائية. "
     "ابدأ بالإجابة المباشرة على السؤال، ثم اشرح الفكرة الأساسية التي بُنيت عليها الإجابة، ثم توسع في الشرح عند الحاجة بطريقة منظمة ومنطقية. "
     "اشرح الخطوات بالتسلسل إذا كان الموضوع يتطلب ذلك، ولا تقفز بين الأفكار. "
