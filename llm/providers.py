@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import time
 from typing import List, Optional
 
@@ -127,8 +128,8 @@ class GeminiProvider(LLMProvider):
         api_key: Optional[str] = None,
         model: Optional[str] = None,
     ):
-        self._api_key = api_key or _LLM.gemini_api_key
-        self._model = model or _LLM.gemini_model
+        self._api_key = api_key or os.getenv("ROBOT_GEMINI_API_KEY", "")
+        self._model = model or os.getenv("ROBOT_GEMINI_MODEL", "gemini-3.5-flash")
 
         if self._api_key:
             from google import genai
@@ -192,7 +193,7 @@ def create_provider() -> LLMProvider:
     provider_name = _LLM.provider or "openrouter"
     if provider_name == "gemini":
         logger.info("[LLM] Provider: Gemini")
-        logger.info("[LLM] Model: %s", _LLM.gemini_model)
+        logger.info("[LLM] Model: %s", os.getenv("ROBOT_GEMINI_MODEL", "gemini-3.5-flash"))
         return GeminiProvider()
     logger.info("[LLM] Provider: OpenRouter")
     logger.info("[LLM] Model: %s", _LLM.openrouter_model)
